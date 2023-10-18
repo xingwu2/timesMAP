@@ -75,7 +75,7 @@ struct Hyperparams
 {
     // Distribution hyperparameters
     double pi_a = 1.0;
-    double pi_b = 1.0;
+    double pi_b = 100.0;
     double sigma_1_a = 1.0;
     double sigma_1_b = 1.0;
     double sigma_e_a = 1.0;
@@ -374,8 +374,7 @@ double sample_sigma_1( Hyperparams const& hyper, Posteriors const& post, State& 
 	auto const b_new = 0.5 * sum_beta_gamma_sqr + hyper.sigma_1_b;
 
     // Draw from distribution
-    // TODO check alpha/beta vs k/theta
-    std::gamma_distribution<> dist_gamma( a_new, 1.0 / b_new );
+    std::gamma_distribution<> dist_gamma( a_new, b_new );
     auto const sigma_1_neg2 = dist_gamma( state.rand_gen );
 	return std::sqrt( 1.0 / sigma_1_neg2 );
 }
@@ -401,8 +400,7 @@ double sample_sigma_e( Data const& data, Hyperparams const& hyper, State& state 
     auto const b_new = sum_square_resid / 2.0 + hyper.sigma_e_b;
 
     // Draw from distribution
-    // TODO check alpha/beta vs k/theta
-    std::gamma_distribution<> dist_gamma( a_new, 1.0 / b_new );
+    std::gamma_distribution<> dist_gamma( a_new, b_new );
     auto const sigma_e_neg2 = dist_gamma( state.rand_gen );
 	return std::sqrt( 1.0 / sigma_e_neg2 );
 }
@@ -454,7 +452,6 @@ void sample_and_update_alpha( Data const& data, Posteriors& post, State& state )
         if( data.num_covar == 1 ) {
             assert( c == 0 );
             for( size_t i = 0; i < data.num_indiv; ++i ) {
-                // TODO in python, you compute `new_alpha`, but don't return it --> bug!
                 state.product_c_alpha[i] = data.c(i, c) * post.alpha[c];
             }
         } else {
@@ -488,9 +485,10 @@ void sample_and_update_gamma( Data const& data, Posteriors& post, State& state )
         auto const b = ( 1.0 - post.pi ) / ( 1.0 - post.pi + post.pi * a );
 
         // Draw a new gamma
-        // TODO replace by bernoulli? same for the initialization
-        std::binomial_distribution<> dist_binomial( 1, 1.0 - b );
-        post.gamma[s] = dist_binomial( state.rand_gen );
+        // std::binomial_distribution<> dist_binomial( 1, 1.0 - b );
+        // post.gamma[s] = dist_binomial( state.rand_gen );
+        std::bernoulli_distribution<> dist_bernoulli( 1.0 - b );
+        post.gamma[s] = dist_bernoulli( state.rand_gen );
     }
 }
 
@@ -642,7 +640,6 @@ std::vector<double> geweke_z_scores(
     while( start_idx < static_cast<size_t>( last_start_idx )) {
 
         // Compute moments of first slice
-        // TODO here and later: population or sample variance? --> i guess population?
         Moments first_slice_moments;
         auto const first_slice_end_idx = start_idx + static_cast<size_t>(first * (end_idx - start_idx));
         assert( start_idx < x.size() && first_slice_end_idx < x.size() );
@@ -956,7 +953,6 @@ Statistics compute_sample_statistics(
             if( std::abs( post.beta[s] ) > hyper.large_beta ) {
                 circ_prod *= 1.0 + data.x(i, s) * post.beta[s];
             }
-            // TODO else large_beta_moments.push( 0.0 ) ?! --> do we need to track the non-large ones?
         }
         large_beta_moments.push( circ_prod );
     }
@@ -1020,9 +1016,11 @@ Posteriors initial_posteriors( Data const& data, State& state )
 
     // Init gamma
     post.gamma.resize( num_snps );
-    std::binomial_distribution<> dist_binomial( 1, post.pi );
+    // std::binomial_distribution<> dist_binomial( 1, post.pi );
+    std::bernoulli_distribution<> dist_bernoulli( post.pi );
     for( auto& v : post.gamma ) {
-        v = dist_binomial( state.rand_gen );
+        // v = dist_binomial( state.rand_gen );
+        v = dist_bernoulli( state.rand_gen );
     }
 
     // Init beta
@@ -1095,8 +1093,10 @@ void sampling(
         }
 
         // After a while, start testing for convergence
-        // TODO the following will check convergence in every iteration - proably not intended?
-        if( it > run.burnin_iterations + run.test_convergence_start ) {
+        if(
+            it > run.burnin_iterations + run.test_convergence_start &&
+            it % run.test_convergence_interval == 0
+        ) {
             LOG_INFO << "Testing convergence";
             if( has_converged( data, hyper, trace )) {
                 break;
