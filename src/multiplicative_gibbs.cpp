@@ -110,6 +110,7 @@ struct Posteriors
 struct State
 {
     // Random state
+    // TODO: other engines are faster - if they are good enough for MCMC, we might want to switch
     std::random_device rand_dev;
     std::default_random_engine rand_gen{ rand_dev() };
 
@@ -560,65 +561,6 @@ void sample_and_update_beta( Data const& data, Posteriors& post, State& state )
             auto const circ_prod = data.x(i, s) * post.beta[s] + 1.0;
             state.circle_product_x_beta[i] *= circ_prod;
         }
-    }
-}
-
-// TODO likely wrong? and not even faster...
-void sample_and_update_beta_maybe_fast_but_wrong( Data const& data, Posteriors& post, State& state )
-{
-    assert( data.num_indiv == data.x.rows() );
-    assert( data.num_indiv == state.circle_product_x_beta.size() );
-    assert( data.num_snps  == data.x.cols() );
-    assert( data.num_snps  == post.beta.size() );
-    assert( data.num_snps  == post.gamma.size() );
-
-    // Some constants
-    auto const sigma_e_neg2 = std::pow( post.sigma_e, -2 );
-    auto const sigma_1_neg2 = std::pow( post.sigma_1, -2 );
-
-    // Update beta for all snps
-    for( size_t s = 0; s < data.num_snps; ++s ) {
-
-        // Compute helper variables
-        double snp_norm_x_beta_x = 0.0;
-        double dot_prod_residuals = 0.0;
-
-        // Need to keep old beta to factor it out later
-        auto const beta_old = post.beta[s];
-
-        // Draw a new beta
-        if( post.gamma[s] == 0 ) {
-            post.beta[s] = 0.0;
-        } else {
-            std::normal_distribution<> dist_normal(
-                state.snp_mean[s], std::sqrt( state.snp_variance[s] )
-            );
-            post.beta[s] = dist_normal( state.rand_gen );
-        }
-
-        // Update the state caches
-        for( size_t i = 0; i < data.num_indiv; ++i ) {
-            // Remove the circ prod of the non-updated beta from current snp in our cache
-            auto const circ_prod_old = data.x(i, s) * beta_old + 1.0;
-            state.circle_product_x_beta[i] /= circ_prod_old;
-
-            // Compute helper variables
-            auto const x_beta_x = state.circle_product_x_beta[i] * data.x(i, s);
-            auto const residual = data.y[i] - state.product_c_alpha[i] - state.circle_product_x_beta[i];
-
-            // Update our sums
-            snp_norm_x_beta_x += x_beta_x * x_beta_x;
-            dot_prod_residuals += residual * x_beta_x;
-
-            // Add the updated value to current snp in our cache
-            auto const circ_prod_new = data.x(i, s) * post.beta[s] + 1.0;
-            state.circle_product_x_beta[i] *= circ_prod_new;
-        }
-
-        // Compute the new mean and variance and norm of x beta x, and store them
-        state.snp_norm[s]     = snp_norm_x_beta_x;
-        state.snp_variance[s] = 1.0 / ( snp_norm_x_beta_x * sigma_e_neg2 + sigma_1_neg2 );
-        state.snp_mean[s]     = state.snp_variance[s] * dot_prod_residuals * sigma_e_neg2;
     }
 }
 
