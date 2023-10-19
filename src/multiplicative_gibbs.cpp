@@ -487,7 +487,7 @@ void sample_and_update_gamma( Data const& data, Posteriors& post, State& state )
         // Draw a new gamma
         // std::binomial_distribution<> dist_binomial( 1, 1.0 - b );
         // post.gamma[s] = dist_binomial( state.rand_gen );
-        std::bernoulli_distribution<> dist_bernoulli( 1.0 - b );
+        std::bernoulli_distribution dist_bernoulli( 1.0 - b );
         post.gamma[s] = dist_bernoulli( state.rand_gen );
     }
 }
@@ -1021,7 +1021,7 @@ Posteriors initial_posteriors( Data const& data, State& state )
     // Init gamma
     post.gamma.resize( num_snps );
     // std::binomial_distribution<> dist_binomial( 1, post.pi );
-    std::bernoulli_distribution<> dist_bernoulli( post.pi );
+    std::bernoulli_distribution dist_bernoulli( post.pi );
     for( auto& v : post.gamma ) {
         // v = dist_binomial( state.rand_gen );
         v = dist_bernoulli( state.rand_gen );
