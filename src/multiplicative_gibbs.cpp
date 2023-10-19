@@ -374,7 +374,7 @@ double sample_sigma_1( Hyperparams const& hyper, Posteriors const& post, State& 
 	auto const b_new = 0.5 * sum_beta_gamma_sqr + hyper.sigma_1_b;
 
     // Draw from distribution
-    std::gamma_distribution<> dist_gamma( a_new, b_new );
+    std::gamma_distribution<> dist_gamma( a_new, 1.0 / b_new );
     auto const sigma_1_neg2 = dist_gamma( state.rand_gen );
 	return std::sqrt( 1.0 / sigma_1_neg2 );
 }
@@ -400,7 +400,7 @@ double sample_sigma_e( Data const& data, Hyperparams const& hyper, State& state 
     auto const b_new = sum_square_resid / 2.0 + hyper.sigma_e_b;
 
     // Draw from distribution
-    std::gamma_distribution<> dist_gamma( a_new, b_new );
+    std::gamma_distribution<> dist_gamma( a_new, 1.0 / b_new );
     auto const sigma_e_neg2 = dist_gamma( state.rand_gen );
 	return std::sqrt( 1.0 / sigma_e_neg2 );
 }
@@ -1008,8 +1008,8 @@ Posteriors initial_posteriors( Data const& data, State& state )
 
     // Init scalars
     post.pi = 0.001;
-    post.sigma_1 = 1;
-    post.sigma_e = 1;
+    post.sigma_1 = 1.0;
+    post.sigma_e = 1.0;
 
     // Init alpha
     post.alpha.resize( num_covar );
