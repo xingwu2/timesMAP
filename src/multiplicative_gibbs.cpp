@@ -736,11 +736,12 @@ bool has_converged( Data const& data, Hyperparams const& hyper, Trace const& tra
         );
     }
 
-    // Test convergence of pi
+    // XING: instead of testing pi, test large beta ratio
+    // Test convergence of large beta_ratio
     update_zscore_with_trace_variable(
         hyper, trace,
         [&]( TraceEntry const& entry ){
-            return entry.post.pi;
+            return entry.stats.large_beta_ratio;
         },
         max_zscore
     );
@@ -763,11 +764,12 @@ bool has_converged( Data const& data, Hyperparams const& hyper, Trace const& tra
         max_zscore
     );
 
+    // XING: test total heritability instead of large beta heritability
     // Test convergence of large_beta_heritability
     update_zscore_with_trace_variable(
         hyper, trace,
         [&]( TraceEntry const& entry ){
-            return entry.stats.large_beta_heritability;
+            return entry.stats.total_heritability;
         },
         max_zscore
     );
@@ -973,10 +975,12 @@ Statistics compute_sample_statistics(
 bool valid_sample_statistics( Statistics const& stats )
 {
     // Check that we got a usable sample
-    bool const herit_too_large = stats.large_beta_heritability > 1.0;
-    bool const herit_larger_total = stats.large_beta_heritability > stats.total_heritability;
+    //bool const herit_too_large = stats.large_beta_heritability > 1.0;
+    //bool const herit_larger_total = stats.large_beta_heritability > stats.total_heritability;
+    // XING: Test if the total heritability > 1
+    bool const herit_total = stats.total_heritability > 1;
     // TODO and? or? --> apparently, and, but why?
-    if( herit_too_large && herit_larger_total ) {
+    if( herit_total ) {
         LOG_INFO << "unrealistic beta sample:";
         LOG_INFO << " - genetic_var             " << stats.genetic_var;
         LOG_INFO << " - pheno_var               " << stats.pheno_var;
@@ -1003,9 +1007,9 @@ Posteriors initial_posteriors( Data const& data, State& state )
     auto const num_covar = data.c.cols();
 
     // Init scalars
-    post.pi = 0.5;
-    post.sigma_1 = 0.5;
-    post.sigma_e = 0.5;
+    post.pi = 0.001;
+    post.sigma_1 = 1;
+    post.sigma_e = 1;
 
     // Init alpha
     post.alpha.resize( num_covar );
@@ -1042,12 +1046,14 @@ void sampling_step(
 ) {
     assert( std::isfinite( hyper.min_sigma_1 ) && hyper.min_sigma_1 > 0.0 );
     post.sigma_1 = sample_sigma_1( hyper, post, state );
-    if( post.sigma_1 < hyper.min_sigma_1 ) {
-        post.sigma_1 = hyper.min_sigma_1;
-        post.pi = 0.0;
-    } else {
-        post.pi = sample_pi( hyper, post, state );
-    }
+    // XING CHANGED; no need to do this condition anymore
+    // if( post.sigma_1 < hyper.min_sigma_1 ) {
+    //     post.sigma_1 = hyper.min_sigma_1;
+    //     post.pi = 0.0;
+    // } else {
+    //     post.pi = sample_pi( hyper, post, state );
+    // }
+    post.pi = sample_pi( hyper, post, state );
     post.sigma_e = sample_sigma_e( data, hyper, state );
     sample_and_update_gamma( data, post, state );
     sample_and_update_alpha( data, post, state );
