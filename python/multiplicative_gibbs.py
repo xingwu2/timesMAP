@@ -167,7 +167,7 @@ def sampling(y,C,HapDM,sig1_initiate,sige_initiate,pie_initiate,iters,prefix):
 			continue
 
 		else:
-			print(it,str(after - before),pie,large_beta_ratio,sigma_1,sigma_e,total_heritability)
+			#print(it,str(after - before),pie,large_beta_ratio,sigma_1,sigma_e,total_heritability)
 
 			if it >= burn_in_iter:
 				trace[it-burn_in_iter,:] = [sigma_1,sigma_e,large_beta_ratio,total_heritability,pie,it]
