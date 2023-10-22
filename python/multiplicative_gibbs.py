@@ -63,6 +63,7 @@ def sample_gamma(y,C,alpha,H,beta,pie,sigma_1,sigma_e,gamma,H_beta):
 	sigma_e_neg2 = sigma_e**-2
 	sigma_1_neg2 = sigma_1**-2
 	H_beta_neg = H_beta[:,None] / (H*beta + 1)
+	#H_beta_neg = np.transpose(np.ones((len(beta),len(y))) * H_beta) / (H*beta + 1)
 	H_beta_neg_H =  np.multiply(H ,H_beta_neg)
 	variance = 1/(np.sum(H_beta_neg_H**2,axis=0)*sigma_e_neg2+sigma_1_neg2)
 	f = np.sqrt(1/(np.sum(H_beta_neg_H**2,axis=0) * sigma_1**2 * sigma_e_neg2 + 1))
@@ -98,9 +99,17 @@ def sampling(y,C,HapDM,sig1_initiate,sige_initiate,pie_initiate,iters,prefix):
 
 
 	LOG = open(prefix+".log","w")
+
+	#initiate beta,gamma and H matrix
+	C_r, C_c = C.shape
+
+	H = np.array(HapDM)
+
+	H_r,H_c = H.shape
+
 	##specify hyper parameters
 	pie_a = 1
-	pie_b = 100
+	pie_b = H_c
 	a_sigma = 1
 	b_sigma = 1
 	a_e = 1
@@ -112,13 +121,6 @@ def sampling(y,C,HapDM,sig1_initiate,sige_initiate,pie_initiate,iters,prefix):
 
 	
 	print("initiate:",sigma_1,sigma_e,pie,file = LOG)
-
-	#initiate beta,gamma and H matrix
-	C_r, C_c = C.shape
-
-	H = np.array(HapDM)
-
-	H_r,H_c = H.shape
 
 	#initiate alpha, alpha_trace, beta_trace and gamma_trace
 

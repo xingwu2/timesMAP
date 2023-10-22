@@ -1,11 +1,10 @@
 import numpy as np
 import scipy as sp
 import math
-from sklearn import preprocessing
 import pandas as pd 
 import time
 import sys
-import pymc3 as pm3
+import geweke
 
 def sample_pie(gamma,pie_a,pie_b):
 	a_new = np.sum(gamma)+pie_a
@@ -20,16 +19,14 @@ def sample_sigma_1(beta,gamma,a_sigma,b_sigma):
 	sigma_1_new = math.sqrt(1/sigma_1_neg2)
 	return(sigma_1_new)
 
-def sample_sigma_e(y,H,beta,C,alpha,a_e,b_e):
+def sample_sigma_e(y,H_beta,C_alpha,a_e,b_e):
 	n = len(y)
 	a_new = float(n)/2+a_e
-	H_beta = np.matmul(H,beta)
-	C_alpha = np.matmul(C,alpha)
 	resid = y - H_beta - C_alpha
 	b_new = np.sum(np.square(resid))/2+b_e
 	sigma_e_neg2 =np.random.gamma(a_new,1.0/b_new)
 	sigma_e_new = math.sqrt(1/sigma_e_neg2)
-	return(sigma_e_new,H_beta,C_alpha)
+	return(sigma_e_new)
 
 def sample_alpha(y,H_beta,C,alpha,sigma_e,C_alpha):
 
@@ -78,13 +75,19 @@ def sample_beta(y,C_alpha,H,beta,gamma,sigma_1,sigma_e,H_beta):
 			H_beta = H_beta_negj + H[:,j] * beta[j]
 	return(beta,H_beta)
 
-def sampling(y,C,HapDM,sig1_initiate,sige_initiate,pie_initiate,step_size,iters,prefix):
+def sampling(y,C,HapDM,sig1_initiate,sige_initiate,pie_initiate,iters,prefix):
 
 
 	LOG = open(prefix+".log","w")
+	#initiate beta,gamma and H matrix
+	C_r, C_c = C.shape
+
+	H = np.array(HapDM)
+
+	H_r,H_c = H.shape
 	##specify hyper parameters
 	pie_a = 1
-	pie_b = 10
+	pie_b = H_c / 10
 	a_sigma = 1
 	b_sigma = 1
 	a_e = 1
@@ -109,7 +112,7 @@ def sampling(y,C,HapDM,sig1_initiate,sige_initiate,pie_initiate,step_size,iters,
 
 	it = 0
 	burn_in_iter = 2000
-	trace = np.empty((iters-2000,7))
+	trace = np.empty((iters-2000,6))
 	alpha_trace = np.empty((iters-2000,C_c))
 	gamma_trace = np.empty((iters-2000,H_c))
 	beta_trace = np.empty((iters-2000,H_c))
@@ -127,30 +130,31 @@ def sampling(y,C,HapDM,sig1_initiate,sige_initiate,pie_initiate,step_size,iters,
 
 	#start sampling
 
+	H_beta = np.matmul(H,beta)
+	C_alpha = np.matmul(C,alpha)
+
 	while it < iters:
 		before = time.time()
 		sigma_1 = sample_sigma_1(beta,gamma,a_sigma,b_sigma)
 		pie = sample_pie(gamma,pie_a,pie_b)
-		sigma_e,H_beta,C_alpha = sample_sigma_e(y,H,beta,C,alpha,a_e,b_e)
+		sigma_e = sample_sigma_e(y,H_beta,C_alpha,a_e,b_e)
 		gamma = sample_gamma(y,C_alpha,H,beta,pie,sigma_1,sigma_e,gamma,H_beta)
 		alpha,C_alpha = sample_alpha(y,H_beta,C,alpha,sigma_e,C_alpha)
 		beta,H_beta = sample_beta(y,C_alpha,H,beta,gamma,sigma_1,sigma_e,H_beta)
 		genetic_var = np.var(H_beta)
 		pheno_var = np.var(y - C_alpha)
-		large_beta = np.absolute(beta) > 0.2
-		large_beta_ratio = np.sum(large_beta) / H_c
-		large_beta_heritability = np.var(np.matmul(H[:,large_beta],beta[large_beta])) / pheno_var
+		large_beta_ratio = np.sum(np.absolute(beta) > 0.3) / H_c
 		total_heritability = genetic_var / pheno_var
 		after = time.time()
-		if it > 100 and large_beta_heritability > 1:
-			print("unrealistic beta sample",it,sigma_1,sigma_e,sum(gamma),genetic_var,pheno_var,large_beta_heritability,total_heritability)
+		if it > 100 and total_heritability > 1:
+			print("unrealistic beta sample",it,pie,sigma_1,sigma_e,sum(gamma),large_beta_ratio,total_heritability)
 			continue
 
 		else:
-			print(it,str(after - before),pie,sigma_1,sigma_e,sum(gamma),large_beta_ratio,large_beta_heritability,total_heritability)
+			print(it,str(after - before),pie,sigma_1,sigma_e,sum(gamma),large_beta_ratio,total_heritability)
 
 			if it >= burn_in_iter:
-				trace[it-burn_in_iter,:] = [sigma_1,sigma_e,large_beta_ratio,large_beta_heritability,total_heritability,pie,it]
+				trace[it-burn_in_iter,:] = [sigma_1,sigma_e,large_beta_ratio,total_heritability,pie,it]
 				gamma_trace[it-burn_in_iter,:] = gamma
 				beta_trace[it-burn_in_iter,:] = beta
 				alpha_trace[it-burn_in_iter,:] = alpha
@@ -162,32 +166,32 @@ def sampling(y,C,HapDM,sig1_initiate,sige_initiate,pie_initiate,step_size,iters,
 				
 				for a in range(C_c):
 					after_burnin_alpha = alpha_trace[:,a]
-					alpha_zscores = pm3.geweke(after_burnin_alpha)[:,1]
+					alpha_zscores = geweke.geweke(after_burnin_alpha)[:,1]
 					max_z.append(np.amax(np.absolute(alpha_zscores)))
 
 				for b in range(5):
 					after_burnin_beta = top5_beta_trace[:,b]
-					beta_zscores = pm3.geweke(after_burnin_beta)[:,1]
+					beta_zscores = geweke.geweke(after_burnin_beta)[:,1]
 					max_z.append(np.amax(np.absolute(beta_zscores)))
 
-				#convergence for pie
+				#convergence for large beta ratio
 				after_burnin_pie = trace[:,2]
-				pie_zscores = pm3.geweke(after_burnin_pie)[:,1]
+				pie_zscores = geweke.geweke(after_burnin_pie)[:,1]
 				max_z.append(np.amax(np.absolute(pie_zscores)))
 
-				#convergence for large_heritability
+				#convergence for total heritability
 				after_burnin_var = trace[:,3]
-				var_zscores = pm3.geweke(after_burnin_var)[:,1]
+				var_zscores = geweke.geweke(after_burnin_var)[:,1]
 				max_z.append(np.amax(np.absolute(var_zscores)))
 
 				#convergence for sigma_1
 				after_burnin_sigma1 = trace[:,0]
-				sigma1_zscores = pm3.geweke(after_burnin_sigma1)[:,1]
+				sigma1_zscores = geweke.geweke(after_burnin_sigma1)[:,1]
 				max_z.append(np.amax(np.absolute(sigma1_zscores)))
 
 				#convergence for sigma_e
 				after_burnin_sigmae = trace[:,1]
-				sigmae_zscores = pm3.geweke(after_burnin_sigmae)[:,1]
+				sigmae_zscores = geweke.geweke(after_burnin_sigmae)[:,1]
 				max_z.append(np.amax(np.absolute(sigmae_zscores)))
 				
 				if  np.amax(max_z) < 1.5:
@@ -195,7 +199,7 @@ def sampling(y,C,HapDM,sig1_initiate,sige_initiate,pie_initiate,step_size,iters,
 					break
 
 				else:
-					trace_ = np.empty((1000,7))
+					trace_ = np.empty((1000,6))
 					gamma_trace_ = np.empty((1000,H_c))
 					beta_trace_ = np.empty((1000,H_c))
 					alpha_trace_ = np.empty((1000,C_c))
@@ -222,30 +226,6 @@ def sampling(y,C,HapDM,sig1_initiate,sige_initiate,pie_initiate,step_size,iters,
 	gamma_trace = pd.DataFrame(gamma_trace)
 
 	return(trace,alpha_trace,beta_trace,gamma_trace)
-
-
-
-HapDM = np.array(pd.read_csv("X.txt",sep="\t",header=None))
-print(HapDM.shape)
-
-y = []
-with open("additive_y.txt","r") as f:
-	for line in f:
-		line = line.strip("\n")
-		y.append(float(line))
-
-y = np.asarray(y)
-
-C =  np.array(pd.read_csv("C.txt",sep="\t",header=None)) 
-print(C.shape)
-
-
-trace,alpha_trace,beta_trace,gamma_trace = sampling(y,C,HapDM,1,1,0.001,2,12000,"test")
-trace.to_csv("test_additive_trace.txt",sep="\t",header=False,index=False)
-alpha_trace.to_csv("test_additive_alpha_trace.txt",sep="\t",header=False,index=False)
-beta_trace.to_csv("test_additive_beta_trace.txt",sep="\t",header=False,index=False)
-gamma_trace.to_csv("test_additive_gamma_trace.txt",sep="\t",header=False,index=False)
-
 
 
 
