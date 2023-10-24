@@ -1,4 +1,3 @@
-#import modules
 import time
 import argparse
 import numpy as np
