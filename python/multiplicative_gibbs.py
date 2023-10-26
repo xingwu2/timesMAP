@@ -97,9 +97,6 @@ def sample_beta(y,C_alpha,H,beta,gamma,sigma_1,sigma_e,H_beta):
 
 def sampling(y,C,HapDM,sig1_initiate,sige_initiate,pie_initiate,iters,prefix):
 
-
-	LOG = open(prefix+".log","w")
-
 	#initiate beta,gamma and H matrix
 	C_r, C_c = C.shape
 
@@ -120,13 +117,13 @@ def sampling(y,C,HapDM,sig1_initiate,sige_initiate,pie_initiate,iters,prefix):
 	pie = pie_initiate
 
 	
-	print("initiate:",sigma_1,sigma_e,pie,file = LOG)
+	print("parameter initiation:",sigma_1,sigma_e,pie)
 
 	#initiate alpha, alpha_trace, beta_trace and gamma_trace
 
 	it = 0
 	burn_in_iter = 2000
-	trace = np.empty((iters-2000,6))
+	trace = np.empty((iters-2000,5))
 	alpha_trace = np.empty((iters-2000,C_c))
 	gamma_trace = np.empty((iters-2000,H_c))
 	beta_trace = np.empty((iters-2000,H_c))
@@ -163,14 +160,14 @@ def sampling(y,C,HapDM,sig1_initiate,sige_initiate,pie_initiate,iters,prefix):
 		total_heritability = genetic_var / pheno_var
 		after = time.time()
 		if it > 100 and total_heritability > 1:
-			print("unrealistic beta sample",it,genetic_var,pheno_var,total_heritability)
+			#print("unrealistic beta sample",it,genetic_var,pheno_var,total_heritability)
 			continue
 
 		else:
 			#print(it,str(after - before),pie,large_beta_ratio,sigma_1,sigma_e,total_heritability)
 
 			if it >= burn_in_iter:
-				trace[it-burn_in_iter,:] = [sigma_1,sigma_e,large_beta_ratio,total_heritability,pie,it]
+				trace[it-burn_in_iter,:] = [sigma_1,sigma_e,large_beta_ratio,total_heritability,pie]
 				gamma_trace[it-burn_in_iter,:] = gamma
 				beta_trace[it-burn_in_iter,:] = beta
 				alpha_trace[it-burn_in_iter,:] = alpha
@@ -211,11 +208,11 @@ def sampling(y,C,HapDM,sig1_initiate,sige_initiate,pie_initiate,iters,prefix):
 				max_z.append(np.amax(np.absolute(sigmae_zscores)))
 				
 				if  np.amax(max_z) < 1.5:
-					print("convergence has been reached at %i iterations." %(it),file=LOG)
+					print("convergence has been reached at %i iterations." %(it))
 					break
 
 				else:
-					trace_ = np.empty((1000,6))
+					trace_ = np.empty((1000,5))
 					gamma_trace_ = np.empty((1000,H_c))
 					beta_trace_ = np.empty((1000,H_c))
 					alpha_trace_ = np.empty((1000,C_c))
@@ -231,15 +228,20 @@ def sampling(y,C,HapDM,sig1_initiate,sige_initiate,pie_initiate,iters,prefix):
 					iters += 1000
 
 			if (it - burn_in_iter) >= 0 and (it - burn_in_iter ) % 1000 == 0:
-				print("%i iterations have sampled" %(it), str(after - before),trace[it-burn_in_iter,:],file=LOG)
+				print("%i iterations have sampled" %(it), str(after - before),trace[it-burn_in_iter,:])
 
 			it += 1
 	
-	LOG.close()
-	trace = pd.DataFrame(trace)
-	alpha_trace = pd.DataFrame(alpha_trace)
-	beta_trace = pd.DataFrame(beta_trace)
-	gamma_trace = pd.DataFrame(gamma_trace)
+	trace_avg = np.mean(trace,axis=0)
+	trace_sd = np.std(trace,axis=0)
 
-	return(trace,alpha_trace,beta_trace,gamma_trace)
+	alpha_avg = np.mean(alpha_trace,axis=0)
+	alpha_sd = np.std(alpha_trace,axis=0)
+
+	beta_avg = np.mean(beta_trace,axis=0)
+	beta_sd = np.std(beta_trace,axis=0)
+
+	pip = np.mean(gamma_trace,axis = 0)
+
+	return(trace_avg,trace_sd,alpha_avg,alpha_sd,beta_avg,beta_sd,pip)
 
