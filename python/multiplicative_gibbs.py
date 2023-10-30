@@ -131,8 +131,9 @@ def sampling(y,C,HapDM,sig1_initiate,sige_initiate,pie_initiate,iters,prefix):
 
 	alpha = np.random.random(size = C_c)
 	gamma = np.random.binomial(1,pie,H_c)
-	beta = np.array(np.zeros(H_c))
-
+	#beta = np.array(np.zeros(H_c))
+	beta = np.array(np.zeros(H_c),dtype=np.float32)
+	
 	for i in range(H_c):
 		if gamma[i] == 0:
 			beta[i] = 0
