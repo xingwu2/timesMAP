@@ -86,7 +86,7 @@ def sampling(y,C,HapDM,sig1_initiate,sige_initiate,pie_initiate,iters,prefix):
 	H_r,H_c = H.shape
 	##specify hyper parameters
 	pie_a = 1
-	pie_b = H_c / 10
+	pie_b = H_c / 50
 	a_sigma = 1
 	b_sigma = 1
 	a_e = 1
