@@ -106,7 +106,8 @@ def sampling(y,C,HapDM,sig1_initiate,sige_initiate,pie_initiate,iters,prefix):
 
 	##specify hyper parameters
 	pie_a = 1
-	pie_b = H_c
+	## assume 5 causal loci 
+	pie_b = H_c / 5 
 	a_sigma = 1
 	b_sigma = 1
 	a_e = 1
@@ -132,7 +133,7 @@ def sampling(y,C,HapDM,sig1_initiate,sige_initiate,pie_initiate,iters,prefix):
 	alpha = np.random.random(size = C_c)
 	gamma = np.random.binomial(1,pie,H_c)
 	#beta = np.array(np.zeros(H_c))
-	beta = np.array(np.zeros(H_c),dtype=np.float32)
+	beta = np.array(np.zeros(H_c))
 	
 	for i in range(H_c):
 		if gamma[i] == 0:
