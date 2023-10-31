@@ -183,10 +183,10 @@ def sampling(y,C,HapDM,sig1_initiate,sige_initiate,pie_initiate,iters,prefix):
 				var_zscores = geweke.geweke(after_burnin_var)[:,1]
 				max_z.append(np.amax(np.absolute(var_zscores)))
 
-				#convergence for sigma_1
-				after_burnin_sigma1 = trace[:,0]
-				sigma1_zscores = geweke.geweke(after_burnin_sigma1)[:,1]
-				max_z.append(np.amax(np.absolute(sigma1_zscores)))
+				# #convergence for sigma_1
+				# after_burnin_sigma1 = trace[:,0]
+				# sigma1_zscores = geweke.geweke(after_burnin_sigma1)[:,1]
+				# max_z.append(np.amax(np.absolute(sigma1_zscores)))
 
 				#convergence for sigma_e
 				after_burnin_sigmae = trace[:,1]
