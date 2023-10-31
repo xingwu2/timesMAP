@@ -91,7 +91,11 @@ def sample_beta(y,C_alpha,H,beta,gamma,sigma_1,sigma_e,H_beta):
 			residual = y - C_alpha -  H_beta_negi
 			new_mean = new_variance*np.dot(H_beta_negi*H[:,i],residual)*sigma_e_neg2
 			beta[i] = np.random.normal(new_mean,math.sqrt(new_variance))
-			H_beta = H_beta_negi * circle_prodcut_vector(H[:,i], beta[i])
+			if abs(beta[i]) < 0.05:
+				beta[i] = 0
+				H_beta = H_beta_negi
+			else:
+				H_beta = H_beta_negi * circle_prodcut_vector(H[:,i], beta[i])
 	return(beta,H_beta)
 
 
@@ -161,13 +165,12 @@ def sampling(y,C,HapDM,sig1_initiate,sige_initiate,pie_initiate,iters,prefix):
 		large_beta_ratio = np.sum(np.absolute(beta) > 0.3) / len(beta)
 		total_heritability = genetic_var / pheno_var
 		after = time.time()
-		if it > 100 and total_heritability > 1:
+		if it > 100 and (total_heritability > 1 or total_heritability < 0.01):
 			#print("unrealistic beta sample",it,genetic_var,pheno_var,total_heritability)
 			continue
 
 		else:
 			#print(it,str(after - before),pie,large_beta_ratio,sigma_1,sigma_e,total_heritability)
-
 			if it >= burn_in_iter:
 				trace[it-burn_in_iter,:] = [sigma_1,sigma_e,large_beta_ratio,total_heritability,pie]
 				gamma_trace[it-burn_in_iter,:] = gamma
@@ -199,10 +202,10 @@ def sampling(y,C,HapDM,sig1_initiate,sige_initiate,pie_initiate,iters,prefix):
 				var_zscores = geweke.geweke(after_burnin_var)[:,1]
 				max_z.append(np.amax(np.absolute(var_zscores)))
 
-				#convergence for sigma_1
-				after_burnin_sigma1 = trace[:,0]
-				sigma1_zscores = geweke.geweke(after_burnin_sigma1)[:,1]
-				max_z.append(np.amax(np.absolute(sigma1_zscores)))
+				# #convergence for sigma_1
+				# after_burnin_sigma1 = trace[:,0]
+				# sigma1_zscores = geweke.geweke(after_burnin_sigma1)[:,1]
+				# max_z.append(np.amax(np.absolute(sigma1_zscores)))
 
 				#convergence for sigma_e
 				after_burnin_sigmae = trace[:,1]
