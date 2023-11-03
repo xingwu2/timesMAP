@@ -47,7 +47,7 @@ def sample_alpha(y,C,alpha,sigma_e,H_beta,C_alpha):
 		new_variance = 1/(np.sum(C[:,0]**2) * sigma_e**-2)
 		new_mean = new_variance*np.dot((y-H_beta),C[:,0])*sigma_e**-2
 		alpha = np.random.normal(new_mean,math.sqrt(new_variance))
-		C_alpha = np.matmul(C,alpha)
+		C_alpha = C[:,0] * alpha
 	else:
 		for i in range(c):
 			new_variance = 1/(np.sum(C[:,i]**2) * sigma_e**-2)
@@ -58,8 +58,7 @@ def sample_alpha(y,C,alpha,sigma_e,H_beta,C_alpha):
 	return(alpha,C_alpha)
 
 
-def sample_gamma(y,C,alpha,H,beta,pie,sigma_1,sigma_e,gamma,H_beta):
-	C_alpha = np.matmul(C,alpha)
+def sample_gamma(y,C_alpha,H,beta,pie,sigma_1,sigma_e,gamma,H_beta):
 	sigma_e_neg2 = sigma_e**-2
 	sigma_1_neg2 = sigma_1**-2
 	H_beta_neg = H_beta[:,None] / (H*beta + 1)
@@ -99,7 +98,7 @@ def sample_beta(y,C_alpha,H,beta,gamma,sigma_1,sigma_e,H_beta):
 	return(beta,H_beta)
 
 
-def sampling(y,C,HapDM,sig1_initiate,sige_initiate,pie_initiate,iters,prefix):
+def sampling(verbose,y,C,HapDM,iters,prefix,num,trace_container,gamma_container,beta_container,alpha_container):
 
 	#initiate beta,gamma and H matrix
 	C_r, C_c = C.shape
@@ -110,17 +109,16 @@ def sampling(y,C,HapDM,sig1_initiate,sige_initiate,pie_initiate,iters,prefix):
 
 	##specify hyper parameters
 	pie_a = 1
-	## assume 5 causal loci 
-	pie_b = H_c / 5 
+	## assume 10 causal loci 
+	pie_b = H_c / 10
 	a_sigma = 1
 	b_sigma = 1
 	a_e = 1
 	b_e = 1
 
-	sigma_1 = sig1_initiate
-	sigma_e = sige_initiate
-	pie = pie_initiate
-
+	sigma_1 = math.sqrt(1/np.random.gamma(a_sigma,b_sigma))
+	sigma_e = math.sqrt(1/np.random.gamma(a_e,b_e))
+	pie = np.random.beta(pie_a,pie_b)
 	
 	print("parameter initiation:",sigma_1,sigma_e,pie)
 
@@ -157,7 +155,7 @@ def sampling(y,C,HapDM,sig1_initiate,sige_initiate,pie_initiate,iters,prefix):
 		sigma_1 = sample_sigma_1(beta,gamma,a_sigma,b_sigma)
 		pie = sample_pie(gamma,pie_a,pie_b)
 		sigma_e = sample_sigma_e(y,H_beta,C_alpha,a_e,b_e)
-		gamma = sample_gamma(y,C,alpha,H,beta,pie,sigma_1,sigma_e,gamma,H_beta)
+		gamma = sample_gamma(y,C_alpha,H,beta,pie,sigma_1,sigma_e,gamma,H_beta)
 		alpha,C_alpha = sample_alpha(y,C,alpha,sigma_e,H_beta,C_alpha)
 		beta,H_beta = sample_beta(y,C_alpha,H,beta,gamma,sigma_1,sigma_e,H_beta)
 		genetic_var = np.var(H_beta)
@@ -237,16 +235,9 @@ def sampling(y,C,HapDM,sig1_initiate,sige_initiate,pie_initiate,iters,prefix):
 
 			it += 1
 	
-	trace_avg = np.mean(trace,axis=0)
-	trace_sd = np.std(trace,axis=0)
+	trace_container[num] = trace
+	alpha_container[num] = alpha_trace
+	beta_container[num] = beta_trace
+	gamma_container[num] = gamma_trace
 
-	alpha_avg = np.mean(alpha_trace,axis=0)
-	alpha_sd = np.std(alpha_trace,axis=0)
-
-	beta_avg = np.mean(beta_trace,axis=0)
-	beta_sd = np.std(beta_trace,axis=0)
-
-	pip = np.mean(gamma_trace,axis = 0)
-
-	return(trace_avg,trace_sd,alpha_avg,alpha_sd,beta_avg,beta_sd,pip)
 

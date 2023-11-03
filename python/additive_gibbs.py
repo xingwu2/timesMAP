@@ -35,7 +35,7 @@ def sample_alpha(y,H_beta,C,alpha,sigma_e,C_alpha):
 		new_variance = 1/(np.linalg.norm(C[:,0])**2*sigma_e**-2)
 		new_mean = new_variance*np.dot((y-H_beta),C[:,0])*sigma_e**-2
 		alpha = np.random.normal(new_mean,math.sqrt(new_variance))
-		C_alpha = np.matmul(C,alpha)
+		C_alpha = C[:,0] * alpha 
 	else:
 		for i in range(c):
 			new_variance = 1/(np.sum(C[:,i]**2)*sigma_e**-2)
@@ -72,10 +72,14 @@ def sample_beta(y,C_alpha,H,beta,gamma,sigma_1,sigma_e,H_beta):
 			residual = y - C_alpha -  H_beta + H[:,j] * beta[j]
 			new_mean = new_variance*np.dot(residual,H[:,j])*sigma_e_neg2
 			beta[j] = np.random.normal(new_mean,math.sqrt(new_variance))
-			H_beta = H_beta_negj + H[:,j] * beta[j]
+			if beta[j] < 0.05:
+				beta[j] = 0
+				H_beta = H_beta_negj
+			else:
+				H_beta = H_beta_negj + H[:,j] * beta[j]
 	return(beta,H_beta)
 
-def sampling(y,C,HapDM,sig1_initiate,sige_initiate,pie_initiate,iters,prefix):
+def sampling(verbose,y,C,HapDM,iters,prefix,num,trace_container,gamma_container,beta_container,alpha_container):
 
 
 	#initiate beta,gamma and H matrix
@@ -92,10 +96,9 @@ def sampling(y,C,HapDM,sig1_initiate,sige_initiate,pie_initiate,iters,prefix):
 	a_e = 1
 	b_e = 1
 
-	sigma_1 = sig1_initiate
-	sigma_e = sige_initiate
-	pie = pie_initiate
-
+	sigma_1 = math.sqrt(1/np.random.gamma(a_sigma,b_sigma))
+	sigma_e = math.sqrt(1/np.random.gamma(a_e,b_e))
+	pie = np.random.beta(pie_a,pie_b)
 	
 	print("initiate:",sigma_1,sigma_e,pie)
 
@@ -150,10 +153,11 @@ def sampling(y,C,HapDM,sig1_initiate,sige_initiate,pie_initiate,iters,prefix):
 			continue
 
 		else:
-			#print(it,str(after - before),pie,sigma_1,sigma_e,sum(gamma),large_beta_ratio,total_heritability)
+			if verbose:
+				print(it,str(after - before),pie,sigma_1,sigma_e,sum(gamma),large_beta_ratio,total_heritability)
 
 			if it >= burn_in_iter:
-				trace[it-burn_in_iter,:] = [sigma_1,sigma_e,large_beta_ratio,total_heritability,pie]
+				trace[it-burn_in_iter,:] = [sigma_1,sigma_e,large_beta_ratio,total_heritability,sum(gamma)]
 				gamma_trace[it-burn_in_iter,:] = gamma
 				beta_trace[it-burn_in_iter,:] = beta
 				alpha_trace[it-burn_in_iter,:] = alpha
@@ -218,18 +222,11 @@ def sampling(y,C,HapDM,sig1_initiate,sige_initiate,pie_initiate,iters,prefix):
 
 			it += 1
 	
-	trace_avg = np.mean(trace,axis=0)
-	trace_sd = np.std(trace,axis=0)
+	trace_container[num] = trace
+	alpha_container[num] = alpha_trace
+	beta_container[num] = beta_trace
+	gamma_container[num] = gamma_trace
 
-	alpha_avg = np.mean(alpha_trace,axis=0)
-	alpha_sd = np.std(alpha_trace,axis=0)
-
-	beta_avg = np.mean(beta_trace,axis=0)
-	beta_sd = np.std(beta_trace,axis=0)
-
-	pip = np.mean(gamma_trace,axis = 0)
-
-	return(trace_avg,trace_sd,alpha_avg,alpha_sd,beta_avg,beta_sd,pip)
 
 
 
