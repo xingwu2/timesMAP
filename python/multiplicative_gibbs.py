@@ -110,7 +110,7 @@ def sampling(verbose,y,C,HapDM,iters,prefix,num,trace_container,gamma_container,
 	##specify hyper parameters
 	pie_a = 1
 	## assume 10 causal loci 
-	pie_b = H_c / 10
+	pie_b = 10000
 	a_sigma = 1
 	b_sigma = 1
 	a_e = 1
@@ -170,7 +170,7 @@ def sampling(verbose,y,C,HapDM,iters,prefix,num,trace_container,gamma_container,
 		else:
 			#print(it,str(after - before),pie,large_beta_ratio,sigma_1,sigma_e,total_heritability)
 			if it >= burn_in_iter:
-				trace[it-burn_in_iter,:] = [sigma_1,sigma_e,large_beta_ratio,total_heritability,pie]
+				trace[it-burn_in_iter,:] = [sigma_1,sigma_e,large_beta_ratio,total_heritability,sum(gamma)]
 				gamma_trace[it-burn_in_iter,:] = gamma
 				beta_trace[it-burn_in_iter,:] = beta
 				alpha_trace[it-burn_in_iter,:] = alpha
