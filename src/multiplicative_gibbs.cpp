@@ -69,12 +69,15 @@ struct Runparams
     size_t sanity_iterations = 100;
     size_t test_convergence_start = 10000;
     size_t test_convergence_interval = 1000;
+    // XING add a stop for the chain if it doesnt converge and output results with warnings 
+    size_t test_convergence_stop = 100000;
 };
 
 struct Hyperparams
 {
     // Distribution hyperparameters
     double pi_a = 1.0;
+    // XING change to ratio (n_snps / 10 or n_snps / 20)
     double pi_b = 100.0;
     double sigma_1_a = 1.0;
     double sigma_1_b = 1.0;
@@ -82,7 +85,8 @@ struct Hyperparams
     double sigma_e_b = 1.0;
 
     // Sample validity
-    double min_sigma_1 = 0.05;
+    // XING changed to minimal beta
+    double min_beta = 0.05;
     double large_beta = 0.3;
 
     // Convergence criteria
@@ -125,7 +129,8 @@ struct Statistics
     double genetic_var             = 0.0;
     double pheno_var               = 0.0;
     double large_beta_ratio        = 0.0;
-    double large_beta_heritability = 0.0;
+    // XING no need to test convergence on large_beta_heritability
+    //double large_beta_heritability = 0.0;
     double total_heritability      = 0.0;
 };
 
@@ -232,6 +237,7 @@ Data read_input_data(
 //     circle_product_matrix
 // -------------------------------------------------------------------------
 
+// XING approved
 std::vector<double> circle_product_matrix(
     Matrix<unsigned char> const& x, std::vector<double> const& beta
 ) {
@@ -250,6 +256,8 @@ std::vector<double> circle_product_matrix(
     return result;
 }
 
+
+// XING not sure what the following does
 // -------------------------------------------------------------------------
 //     update_state_snp_cache
 // -------------------------------------------------------------------------
@@ -271,7 +279,7 @@ void update_state_snp_cache( Data const& data, Posteriors const& post, State& st
     for( size_t i = 0; i < data.num_indiv; ++i ) {
         // Compute helper variables
         auto const x_beta_x = state.circle_product_x_beta[i] * data.x(i, s);
-        auto const residual = data.y[i] - state.product_c_alpha[i] - state.circle_product_x_beta[i];
+        auto const residual = data.y[i] - state.product_c_alpha[i] - state.circle_product_x_beta[i]; // XING Here circle_product_x_beta should be circle_product_x_beta_negi
 
         // Update our sums
         snp_norm_x_beta_x += x_beta_x * x_beta_x;
@@ -332,6 +340,8 @@ void refresh_state_cache( Data const& data, Posteriors const& post, State& state
 //     sample_pi
 // -------------------------------------------------------------------------
 
+
+// XING approved
 double sample_pi( Hyperparams const& hyper, Posteriors const& post, State& state )
 {
     // Sum the gammas, and compute new a and b
@@ -359,6 +369,9 @@ double sample_pi( Hyperparams const& hyper, Posteriors const& post, State& state
 //     sample_sigma_1
 // -------------------------------------------------------------------------
 
+// XING C++'s gamma distribution is shape/scale, which is the same as python random gamma
+// The math is based on shape/rate, and rate is 1/scale. 
+// XING approved
 double sample_sigma_1( Hyperparams const& hyper, Posteriors const& post, State& state )
 {
     // Compute new a and b
@@ -374,8 +387,8 @@ double sample_sigma_1( Hyperparams const& hyper, Posteriors const& post, State& 
 	auto const b_new = 0.5 * sum_beta_gamma_sqr + hyper.sigma_1_b;
 
     // Draw from distribution
-    std::gamma_distribution<> dist_gamma( a_new, 1.0 / b_new );
-    auto const sigma_1_neg2 = dist_gamma( state.rand_gen );
+    std::gamma_distribution<> dist_gamma( a_new, 1.0 / b_new ); // this is correct
+    auto const sigma_1_neg2 = dist_gamma( state.rand_gen ); 
 	return std::sqrt( 1.0 / sigma_1_neg2 );
 }
 
@@ -383,6 +396,7 @@ double sample_sigma_1( Hyperparams const& hyper, Posteriors const& post, State& 
 //     sample_sigma_e
 // -------------------------------------------------------------------------
 
+// XING approved
 double sample_sigma_e( Data const& data, Hyperparams const& hyper, State& state )
 {
     assert( data.num_indiv == state.circle_product_x_beta.size() );
@@ -408,7 +422,7 @@ double sample_sigma_e( Data const& data, Hyperparams const& hyper, State& state 
 // -------------------------------------------------------------------------
 //     sample_and_update_alpha
 // -------------------------------------------------------------------------
-
+// XING approved
 void sample_and_update_alpha( Data const& data, Posteriors& post, State& state )
 {
     assert( data.num_indiv == data.y.size() );
@@ -466,6 +480,7 @@ void sample_and_update_alpha( Data const& data, Posteriors& post, State& state )
 //     sample_and_update_gamma
 // -------------------------------------------------------------------------
 
+// XING CHECK THE FUNCTION
 void sample_and_update_gamma( Data const& data, Posteriors& post, State& state )
 {
     assert( data.num_snps == post.gamma.size() );
@@ -477,8 +492,9 @@ void sample_and_update_gamma( Data const& data, Posteriors& post, State& state )
     // Update gamma for all snps
     for( size_t s = 0; s < data.num_snps; ++s ) {
 
-        // Compute the intermediate values
-        auto const d = state.snp_norm[s] * sigma_1_neg2 * sigma_1_neg2 * sigma_e_neg2 + 1.0;
+        // Compute the intermediate values 
+        // XING The next line looks incorrect 2 sigma_1_neg2?
+        auto const d = state.snp_norm[s] * sigma_1_neg2 * sigma_1_neg2 * sigma_e_neg2 + 1.0; // also the snp_norm[s] is it correct?
         auto const f = std::sqrt( 1.0 / d );
         auto const v = state.snp_mean[s] * state.snp_mean[s];
         auto const a = f * std::exp( 0.5 * v / state.snp_variance[s] );
@@ -495,7 +511,7 @@ void sample_and_update_gamma( Data const& data, Posteriors& post, State& state )
 // -------------------------------------------------------------------------
 //     sample_and_update_beta
 // -------------------------------------------------------------------------
-
+// XING approved
 void sample_and_update_beta( Data const& data, Posteriors& post, State& state )
 {
     assert( data.num_indiv == data.x.rows() );
@@ -522,9 +538,10 @@ void sample_and_update_beta( Data const& data, Posteriors& post, State& state )
             continue;
         }
 
+        // XING I think this is a bit weird..need to think twice
         // Update the mean and variance using the current state.
-        // TODO This is mostly identical except for the current snp, so we can probably optimize
-        // TODO does this need to be run even when beta is being set to 0?
+        // TODO This is mostly identical except for the current snp, so we can probably optimize ? //XING NOT SURE I UNDERSTAND WHAT YOU MEAN
+        // TODO does this need to be run even when beta is being set to 0? XING YES
         update_state_snp_cache( data, post, state, s );
 
         // Draw a new beta
@@ -532,6 +549,11 @@ void sample_and_update_beta( Data const& data, Posteriors& post, State& state )
             state.snp_mean[s], std::sqrt( state.snp_variance[s] )
         );
         post.beta[s] = dist_normal( state.rand_gen );
+
+        // XING add a minimum beta threshold
+        if(post.beta[s] < hyper.min_beta){
+           post.beta[s] = 0.0 
+        }
 
         // Add the updated value to current snp in our cache
         for( size_t i = 0; i < data.num_indiv; ++i ) {
@@ -745,15 +767,15 @@ bool has_converged( Data const& data, Hyperparams const& hyper, Trace const& tra
         },
         max_zscore
     );
-
+    // XING dont test for sigma_1
     // Test convergence of sigma_1
-    update_zscore_with_trace_variable(
-        hyper, trace,
-        [&]( TraceEntry const& entry ){
-            return entry.post.sigma_1;
-        },
-        max_zscore
-    );
+    // update_zscore_with_trace_variable(
+    //    hyper, trace,
+    //   [&]( TraceEntry const& entry ){
+    //        return entry.post.sigma_1;
+    //    },
+    //    max_zscore
+   // );
 
     // Test convergence of sigma_e
     update_zscore_with_trace_variable(
@@ -779,6 +801,7 @@ bool has_converged( Data const& data, Hyperparams const& hyper, Trace const& tra
         LOG_INFO << "Convergence has been reached";
         return true;
     }
+    // XING add a convergence stop 
     return false;
 }
 
@@ -1007,6 +1030,7 @@ Posteriors initial_posteriors( Data const& data, State& state )
     auto const num_covar = data.c.cols();
 
     // Init scalars
+    // XING need some random initiation for multi-threading
     post.pi = 0.001;
     post.sigma_1 = 1.0;
     post.sigma_e = 1.0;
