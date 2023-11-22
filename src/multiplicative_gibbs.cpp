@@ -69,23 +69,22 @@ struct Runparams
     size_t sanity_iterations = 100;
     size_t test_convergence_start = 10000;
     size_t test_convergence_interval = 1000;
-    // XING add a stop for the chain if it doesnt converge and output results with warnings 
     size_t test_convergence_stop = 100000;
 };
 
 struct Hyperparams
 {
-    // Distribution hyperparameters
+    // Distribution hyperparameters.
+    // pi_b is initialized to ratio num_snps / pi_b_ratio
     double pi_a = 1.0;
-    // XING change to ratio (n_snps / 10 or n_snps / 20)
-    double pi_b = 100.0;
+    double pi_b = 1.0;
+    double pi_b_ratio = 10.0;
     double sigma_1_a = 1.0;
     double sigma_1_b = 1.0;
     double sigma_e_a = 1.0;
     double sigma_e_b = 1.0;
 
     // Sample validity
-    // XING changed to minimal beta
     double min_beta = 0.05;
     double large_beta = 0.3;
 
@@ -130,8 +129,7 @@ struct Statistics
     double genetic_var             = 0.0;
     double pheno_var               = 0.0;
     double large_beta_ratio        = 0.0;
-    // XING no need to test convergence on large_beta_heritability
-    //double large_beta_heritability = 0.0;
+    double large_beta_heritability = 0.0;
     double total_heritability      = 0.0;
 };
 
@@ -235,10 +233,38 @@ Data read_input_data(
 // =================================================================================================
 
 // -------------------------------------------------------------------------
+//     draw_pi
+// -------------------------------------------------------------------------
+
+template< class Generator >
+double draw_pi( double a, double b, Generator& gen )
+{
+    // Need to get a beta distrib by using two gamma distribs,
+    // see https://stackoverflow.com/a/10359049
+    std::gamma_distribution<> dist_gamma_a( a, 1.0 );
+    std::gamma_distribution<> dist_gamma_b( b, 1.0 );
+    auto const draw_a = dist_gamma_a( gen );
+    auto const draw_b = dist_gamma_b( gen );
+    return draw_a / ( draw_a + draw_b );
+}
+
+// -------------------------------------------------------------------------
+//     draw_sigma_std_dev
+// -------------------------------------------------------------------------
+
+template< class Generator >
+double draw_sigma_std_dev( double a, double b, Generator& gen )
+{
+    // see https://stackoverflow.com/a/10359049
+    std::gamma_distribution<> dist_gamma( a, 1.0 / b );
+    auto const sigma_1_neg2 = dist_gamma( gen );
+	return std::sqrt( 1.0 / sigma_1_neg2 );
+}
+
+// -------------------------------------------------------------------------
 //     circle_product_matrix
 // -------------------------------------------------------------------------
 
-// XING approved
 std::vector<double> circle_product_matrix(
     Matrix<unsigned char> const& x, std::vector<double> const& beta
 ) {
@@ -257,8 +283,6 @@ std::vector<double> circle_product_matrix(
     return result;
 }
 
-
-// XING not sure what the following does
 // -------------------------------------------------------------------------
 //     update_state_snp_cache
 // -------------------------------------------------------------------------
@@ -278,9 +302,11 @@ void update_state_snp_cache( Data const& data, Posteriors const& post, State& st
     double snp_norm_x_beta_x = 0.0;
     double dot_prod_residuals = 0.0;
     for( size_t i = 0; i < data.num_indiv; ++i ) {
-        // Compute helper variables
+        // Compute helper variables.
+        // circle_product_x_beta is the equivalent of circle_product_x_beta_negi in the Python code,
+        // i.e., all _but_ the current SNP.
         auto const x_beta_x = state.circle_product_x_beta[i] * data.x(i, s);
-        auto const residual = data.y[i] - state.product_c_alpha[i] - state.circle_product_x_beta[i]; // XING Here circle_product_x_beta should be circle_product_x_beta_negi
+        auto const residual = data.y[i] - state.product_c_alpha[i] - state.circle_product_x_beta[i];
 
         // Update our sums
         snp_norm_x_beta_x += x_beta_x * x_beta_x;
@@ -341,8 +367,6 @@ void refresh_state_cache( Data const& data, Posteriors const& post, State& state
 //     sample_pi
 // -------------------------------------------------------------------------
 
-
-// XING approved
 double sample_pi( Hyperparams const& hyper, Posteriors const& post, State& state )
 {
     // Sum the gammas, and compute new a and b
@@ -357,22 +381,13 @@ double sample_pi( Hyperparams const& hyper, Posteriors const& post, State& state
     auto const b_new = static_cast<double>( sum_gamma_n ) + hyper.pi_b;
 
     // Draw from distribution
-    // Need to get a beta distrib by using two gamma distribs,
-    // see https://stackoverflow.com/a/10359049
-    std::gamma_distribution<> dist_gamma_a( a_new, 1.0 );
-    std::gamma_distribution<> dist_gamma_b( b_new, 1.0 );
-    auto const draw_a = dist_gamma_a( state.rand_gen );
-    auto const draw_b = dist_gamma_b( state.rand_gen );
-    return draw_a / ( draw_a + draw_b );
+    return draw_pi( a_new, b_new, state.rand_gen );
 }
 
 // -------------------------------------------------------------------------
 //     sample_sigma_1
 // -------------------------------------------------------------------------
 
-// XING C++'s gamma distribution is shape/scale, which is the same as python random gamma
-// The math is based on shape/rate, and rate is 1/scale. 
-// XING approved
 double sample_sigma_1( Hyperparams const& hyper, Posteriors const& post, State& state )
 {
     // Compute new a and b
@@ -388,16 +403,13 @@ double sample_sigma_1( Hyperparams const& hyper, Posteriors const& post, State& 
 	auto const b_new = 0.5 * sum_beta_gamma_sqr + hyper.sigma_1_b;
 
     // Draw from distribution
-    std::gamma_distribution<> dist_gamma( a_new, 1.0 / b_new ); // this is correct
-    auto const sigma_1_neg2 = dist_gamma( state.rand_gen ); 
-	return std::sqrt( 1.0 / sigma_1_neg2 );
+    return draw_sigma_std_dev( a_new, b_new, state.rand_gen );
 }
 
 // -------------------------------------------------------------------------
 //     sample_sigma_e
 // -------------------------------------------------------------------------
 
-// XING approved
 double sample_sigma_e( Data const& data, Hyperparams const& hyper, State& state )
 {
     assert( data.num_indiv == state.circle_product_x_beta.size() );
@@ -415,15 +427,13 @@ double sample_sigma_e( Data const& data, Hyperparams const& hyper, State& state 
     auto const b_new = sum_square_resid / 2.0 + hyper.sigma_e_b;
 
     // Draw from distribution
-    std::gamma_distribution<> dist_gamma( a_new, 1.0 / b_new );
-    auto const sigma_e_neg2 = dist_gamma( state.rand_gen );
-	return std::sqrt( 1.0 / sigma_e_neg2 );
+    return draw_sigma_std_dev( a_new, b_new, state.rand_gen );
 }
 
 // -------------------------------------------------------------------------
 //     sample_and_update_alpha
 // -------------------------------------------------------------------------
-// XING approved
+
 void sample_and_update_alpha( Data const& data, Posteriors& post, State& state )
 {
     assert( data.num_indiv == data.y.size() );
@@ -481,7 +491,6 @@ void sample_and_update_alpha( Data const& data, Posteriors& post, State& state )
 //     sample_and_update_gamma
 // -------------------------------------------------------------------------
 
-// XING CHECK THE FUNCTION
 void sample_and_update_gamma( Data const& data, Posteriors& post, State& state )
 {
     assert( data.num_snps == post.gamma.size() );
@@ -493,17 +502,14 @@ void sample_and_update_gamma( Data const& data, Posteriors& post, State& state )
     // Update gamma for all snps
     for( size_t s = 0; s < data.num_snps; ++s ) {
 
-        // Compute the intermediate values 
-        // XING The next line looks incorrect 2 sigma_1_neg2?
-        auto const d = state.snp_norm[s] * sigma_1_neg2 * sigma_1_neg2 * sigma_e_neg2 + 1.0; // also the snp_norm[s] is it correct?
+        // Compute the intermediate values
+        auto const d = state.snp_norm[s] * sigma_e_neg2 / sigma_1_neg2 + 1.0;
         auto const f = std::sqrt( 1.0 / d );
         auto const v = state.snp_mean[s] * state.snp_mean[s];
         auto const a = f * std::exp( 0.5 * v / state.snp_variance[s] );
         auto const b = ( 1.0 - post.pi ) / ( 1.0 - post.pi + post.pi * a );
 
         // Draw a new gamma
-        // std::binomial_distribution<> dist_binomial( 1, 1.0 - b );
-        // post.gamma[s] = dist_binomial( state.rand_gen );
         std::bernoulli_distribution dist_bernoulli( 1.0 - b );
         post.gamma[s] = dist_bernoulli( state.rand_gen );
     }
@@ -512,9 +518,10 @@ void sample_and_update_gamma( Data const& data, Posteriors& post, State& state )
 // -------------------------------------------------------------------------
 //     sample_and_update_beta
 // -------------------------------------------------------------------------
-// XING approved
-void sample_and_update_beta( Data const& data, Posteriors& post, State& state )
-{
+
+void sample_and_update_beta(
+    Data const& data, Hyperparams const& hyper, Posteriors& post, State& state
+) {
     assert( data.num_indiv == data.x.rows() );
     assert( data.num_indiv == state.circle_product_x_beta.size() );
     assert( data.num_snps  == data.x.cols() );
@@ -529,6 +536,9 @@ void sample_and_update_beta( Data const& data, Posteriors& post, State& state )
             state.circle_product_x_beta[i] /= circ_prod;
         }
 
+        // Update the mean and variance using the current state.
+        update_state_snp_cache( data, post, state, s );
+
         // Update the beta for the spike case.
         // In that case, we do not need to update circle_product_x_beta any more;
         // we removed the previous snp value, and do not want to add a new one.
@@ -539,21 +549,17 @@ void sample_and_update_beta( Data const& data, Posteriors& post, State& state )
             continue;
         }
 
-        // XING I think this is a bit weird..need to think twice
-        // Update the mean and variance using the current state.
-        // TODO This is mostly identical except for the current snp, so we can probably optimize ? //XING NOT SURE I UNDERSTAND WHAT YOU MEAN
-        // TODO does this need to be run even when beta is being set to 0? XING YES
-        update_state_snp_cache( data, post, state, s );
-
         // Draw a new beta
         std::normal_distribution<> dist_normal(
             state.snp_mean[s], std::sqrt( state.snp_variance[s] )
         );
         post.beta[s] = dist_normal( state.rand_gen );
 
-        // XING add a minimum beta threshold
-        if(post.beta[s] < hyper.min_beta){
-           post.beta[s] = 0.0 
+        // Ensure minimum beta threshold
+        assert( hyper.min_beta > 0.0 );
+        if( std::abs( post.beta[s] ) < hyper.min_beta ) {
+           post.beta[s] = 0.0;
+           continue;
         }
 
         // Add the updated value to current snp in our cache
@@ -700,7 +706,6 @@ bool has_converged( Data const& data, Hyperparams const& hyper, Trace const& tra
         );
     }
 
-    // XING: instead of testing pi, test large beta ratio
     // Test convergence of large beta_ratio
     update_zscore_with_trace_variable(
         hyper, trace,
@@ -709,15 +714,15 @@ bool has_converged( Data const& data, Hyperparams const& hyper, Trace const& tra
         },
         max_zscore
     );
-    // XING dont test for sigma_1
+
     // Test convergence of sigma_1
     // update_zscore_with_trace_variable(
-    //    hyper, trace,
-    //   [&]( TraceEntry const& entry ){
+    //     hyper, trace,
+    //     [&]( TraceEntry const& entry ){
     //        return entry.post.sigma_1;
-    //    },
-    //    max_zscore
-   // );
+    //     },
+    //     max_zscore
+    // );
 
     // Test convergence of sigma_e
     update_zscore_with_trace_variable(
@@ -728,8 +733,7 @@ bool has_converged( Data const& data, Hyperparams const& hyper, Trace const& tra
         max_zscore
     );
 
-    // XING: test total heritability instead of large beta heritability
-    // Test convergence of large_beta_heritability
+    // Test convergence of total_heritability
     update_zscore_with_trace_variable(
         hyper, trace,
         [&]( TraceEntry const& entry ){
@@ -743,7 +747,6 @@ bool has_converged( Data const& data, Hyperparams const& hyper, Trace const& tra
         LOG_INFO << "Convergence has been reached";
         return true;
     }
-    // XING add a convergence stop 
     return false;
 }
 
@@ -939,13 +942,12 @@ Statistics compute_sample_statistics(
 
 bool valid_sample_statistics( Statistics const& stats )
 {
+    // Previous alternative checks, not currently used.
+    // bool const herit_too_large = stats.large_beta_heritability > 1.0;
+    // bool const herit_larger_total = stats.large_beta_heritability > stats.total_heritability;
+
     // Check that we got a usable sample
-    //bool const herit_too_large = stats.large_beta_heritability > 1.0;
-    //bool const herit_larger_total = stats.large_beta_heritability > stats.total_heritability;
-    // XING: Test if the total heritability > 1
-    bool const herit_total = stats.total_heritability > 1;
-    // TODO and? or? --> apparently, and, but why?
-    if( herit_total ) {
+    if( stats.total_heritability > 1 or stats.total_heritability < 0.01 ) {
         LOG_INFO << "unrealistic beta sample:";
         LOG_INFO << " - genetic_var             " << stats.genetic_var;
         LOG_INFO << " - pheno_var               " << stats.pheno_var;
@@ -962,20 +964,40 @@ bool valid_sample_statistics( Statistics const& stats )
 // =================================================================================================
 
 // -------------------------------------------------------------------------
+//     initialize_hyperparams
+// -------------------------------------------------------------------------
+
+void initialize_hyperparams( Data const& data, Hyperparams& hyper )
+{
+    hyper.pi_b = data.num_snps / hyper.pi_b_ratio;
+    if( hyper.pi_b <= 1.0 ) {
+        throw std::runtime_error( "Too few SNPs, chain would not converge." );
+    }
+}
+
+// -------------------------------------------------------------------------
 //     initial_posteriors
 // -------------------------------------------------------------------------
 
-Posteriors initial_posteriors( Data const& data, State& state )
+Posteriors initial_posteriors( Data const& data, Hyperparams const& hyper, State& state )
 {
     Posteriors post;
     auto const num_snps  = data.x.cols();
     auto const num_covar = data.c.cols();
 
-    // Init scalars
-    // XING need some random initiation for multi-threading
-    post.pi = 0.001;
-    post.sigma_1 = 1.0;
-    post.sigma_e = 1.0;
+    // Init scalars randomly (needed for multi-threaded chains)
+    assert( hyper.pi_b > 1.0 );
+    post.pi = draw_pi( hyper.pi_a, hyper.pi_b, state.rand_gen );
+    post.sigma_1 = draw_sigma_std_dev( hyper.sigma_1_a, hyper.sigma_1_b, state.rand_gen );
+    post.sigma_e = draw_sigma_std_dev( hyper.sigma_e_a, hyper.sigma_e_b, state.rand_gen );
+    LOG_DBG << "Initial pi: " << post.pi;
+    LOG_DBG << "Initial sigma_1: " << post.sigma_1;
+    LOG_DBG << "Initial sigma_e: " << post.sigma_e;
+
+    // Hard coded reasonable values, not used in favor of random init.
+    // post.pi = 0.001;
+    // post.sigma_1 = 1.0;
+    // post.sigma_e = 1.0;
 
     // Init alpha
     post.alpha.resize( num_covar );
@@ -1023,7 +1045,7 @@ void sampling_step(
     post.sigma_e = sample_sigma_e( data, hyper, state );
     sample_and_update_gamma( data, post, state );
     sample_and_update_alpha( data, post, state );
-    sample_and_update_beta( data, post, state );
+    sample_and_update_beta( data, hyper, post, state );
 }
 
 // -------------------------------------------------------------------------
@@ -1037,7 +1059,7 @@ void sampling(
     size_t it = 1;
     size_t max_it = run.burnin_iterations + run.regular_iterations;
 
-    while( it <= max_it ) {
+    while( it <= max_it && it <= run.test_convergence_stop ) {
         LOG_TIME << "Iteration " << it;
 
         // Do all sampling updates. We need a copy of the posterior here,
@@ -1081,6 +1103,9 @@ void sampling(
         }
 
         ++it;
+    }
+    if( it >= run.test_convergence_stop ) {
+        LOG_INFO << "Chain has not converged after " << it << " iterations";
     }
 }
 
@@ -1129,7 +1154,8 @@ int main( int argc, char** argv )
     Runparams run;
     Hyperparams hyper;
     Trace trace;
-    auto post = initial_posteriors( data, state );
+    initialize_hyperparams( data, hyper );
+    auto post = initial_posteriors( data, hyper, state );
     refresh_state_cache( data, post, state );
     trace.entries.reserve( run.test_convergence_start );
 
