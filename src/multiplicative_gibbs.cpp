@@ -126,6 +126,7 @@ struct State
 
 struct Statistics
 {
+    size_t polygenicity            = 0;
     double genetic_var             = 0.0;
     double pheno_var               = 0.0;
     double large_beta_ratio        = 0.0;
@@ -796,14 +797,16 @@ void pop_from_trace( Trace& trace, size_t num_elements )
 //     summarize_trace
 // -------------------------------------------------------------------------
 
-void summarize_trace( Data const& data, Trace const& trace )
+void summarize_trace( Data const& data, Trace const& trace, std::string const& file_prefix )
 {
     // Prepare summary statistics of all posterior variables
     auto mom_alpha = std::vector<Moments>( data.num_covar );
     auto mom_beta  = std::vector<Moments>( data.num_snps );
+    auto mom_gamma = std::vector<Moments>( data.num_snps );
     Moments mom_pi;
     Moments mom_sigma_1;
     Moments mom_sigma_e;
+    Moments mom_poly;
 
     // Use the whole trace for the statistics
     for( auto const& entry : trace.entries ) {
@@ -819,10 +822,17 @@ void summarize_trace( Data const& data, Trace const& trace )
             mom_beta[s].push( entry.post.beta[s] );
         }
 
+        // Push gamma
+        assert( data.num_snps == entry.post.gamma.size() );
+        for( size_t s = 0; s < data.num_snps; ++s ) {
+            mom_gamma[s].push( static_cast<double>( entry.post.gamma[s] ));
+        }
+
         // Push others
         mom_pi.push( entry.post.pi );
         mom_sigma_1.push( entry.post.sigma_1 );
         mom_sigma_e.push( entry.post.sigma_e );
+        mom_poly.push( entry.stats.polygenicity );
     }
 
     // Debug print of results
@@ -835,9 +845,22 @@ void summarize_trace( Data const& data, Trace const& trace )
     for( auto const& mom_b : mom_beta ) {
         LOG_INFO << " - " << mom_b.mean() << " ± " << mom_b.stddev();
     }
-    LOG_INFO << "pi      " << mom_pi.mean() << " ± " << mom_pi.stddev();
-    LOG_INFO << "sigma_1 " << mom_sigma_1.mean() << " ± " << mom_sigma_1.stddev();
-    LOG_INFO << "sigma_e " << mom_sigma_e.mean() << " ± " << mom_sigma_e.stddev();
+    LOG_INFO << "gamma";
+    for( auto const& mom_g : mom_gamma ) {
+        LOG_INFO << " - " << mom_g.mean() << " ± " << mom_g.stddev();
+    }
+    LOG_INFO << "pi           " << mom_pi.mean() << " ± " << mom_pi.stddev();
+    LOG_INFO << "sigma_1      " << mom_sigma_1.mean() << " ± " << mom_sigma_1.stddev();
+    LOG_INFO << "sigma_e      " << mom_sigma_e.mean() << " ± " << mom_sigma_e.stddev();
+    LOG_INFO << "polygenicity " << mom_poly.mean() << " ± " << mom_poly.stddev();
+
+    // Also write a trace summary file.
+    auto summary_target = to_file( file_prefix + "_trace_summary.csv" );
+    (*summary_target) << "value\tmean\tstddev\n";
+    (*summary_target) << "pi\t" << mom_pi.mean() << "\t" << mom_pi.stddev() << "\n";
+    (*summary_target) << "sigma_1\t" << mom_sigma_1.mean() << "\t" << mom_sigma_1.stddev() << "\n";
+    (*summary_target) << "sigma_e\t" << mom_sigma_e.mean() << "\t" << mom_sigma_e.stddev() << "\n";
+    (*summary_target) << "polygenicity\t" << mom_poly.mean() << "\t" << mom_poly.stddev() << "\n";
 }
 
 // -------------------------------------------------------------------------
@@ -853,7 +876,7 @@ void write_trace( Trace const& trace, std::string const& file_prefix )
     auto gamma_target = to_file( file_prefix + "_trace_gamma.csv" );
 
     // Write headers for the var target, as that one has some mumbp jumbo columns.
-    (*var_target) << "iteration\tpi\tsigma_1\tsigma_e\tgenetic_var\tpheno_var\t";
+    (*var_target) << "iteration\tpi\tsigma_1\tsigma_e\tpolygenicity\tgenetic_var\tpheno_var\t";
     (*var_target) << "large_beta_ratio\tlarge_beta_heritability\ttotal_heritability\n";
 
     // Now write the whole trace.
@@ -862,6 +885,7 @@ void write_trace( Trace const& trace, std::string const& file_prefix )
         (*var_target) << entry.post.pi << "\t";
         (*var_target) << entry.post.sigma_1 << "\t";
         (*var_target) << entry.post.sigma_e << "\t";
+        (*var_target) << entry.stats.polygenicity << "\t";
         (*var_target) << entry.stats.genetic_var << "\t";
         (*var_target) << entry.stats.pheno_var << "\t";
         (*var_target) << entry.stats.large_beta_ratio << "\t";
@@ -894,6 +918,7 @@ Statistics compute_sample_statistics(
     assert( data.num_indiv == state.product_c_alpha.size() );
     assert( data.num_snps  == data.x.cols() );
     assert( data.num_snps  == post.beta.size() );
+    assert( data.num_snps  == post.gamma.size() );
     assert( std::isfinite( hyper.large_beta ) && hyper.large_beta > 0.0 );
 
     // Return value
@@ -904,12 +929,13 @@ Statistics compute_sample_statistics(
     Moments pheno_moments;
     Moments large_beta_moments;
 
-    // Get the large beta count
+    // Get the large beta count, and sum up the polygenicity
     size_t large_beta_count = 0;
     for( size_t s = 0; s < data.num_snps; ++s ) {
         if( std::abs( post.beta[s] ) > hyper.large_beta ) {
             ++large_beta_count;
         }
+        stats.polygenicity += post.gamma[s];
     }
 
     // Go through the individuals and compute the relevant variances and sums
@@ -1163,7 +1189,7 @@ int main( int argc, char** argv )
     sampling( data, run, hyper, post, state, trace );
 
     // Summarize and write the trace
-    summarize_trace( data, trace );
+    summarize_trace( data, trace, prefix );
     write_trace( trace, prefix );
 
     LOG_INFO << "Finished";
