@@ -322,6 +322,55 @@ void update_state_snp_cache( Data const& data, Posteriors const& post, State& st
     state.snp_norm[s]     = snp_norm_x_beta_x;
     state.snp_variance[s] = 1.0 / ( snp_norm_x_beta_x * sigma_e_neg2 + sigma_1_neg2 );
     state.snp_mean[s]     = state.snp_variance[s] * dot_prod_residuals * sigma_e_neg2;
+
+    LOG_DBG << s << ": snp_norm_x_beta_x=" << snp_norm_x_beta_x << " " << "dot_prod_residuals=" << dot_prod_residuals << " " << "state.snp_norm[s]=" << state.snp_norm[s] << " " << "state.snp_variance[s]=" << state.snp_variance[s] << " " << "state.snp_mean[s]=" <<  state.snp_mean[s];
+}
+
+// -------------------------------------------------------------------------
+//     refresh_state_cache_alpha
+// -------------------------------------------------------------------------
+
+void refresh_state_cache_alpha( Data const& data, Posteriors const& post, State& state )
+{
+    assert( data.num_indiv == state.product_c_alpha.size() );
+    assert( data.num_covar == post.alpha.size() );
+
+    // Init the covarite based values. Will be updated in each iteration.
+    for( size_t i = 0; i < data.num_indiv; ++i ) {
+        for( size_t c = 0; c < data.num_covar; ++c ) {
+            state.product_c_alpha[i] += data.c(i, c) * post.alpha[ c ];
+        }
+    }
+}
+
+// -------------------------------------------------------------------------
+//     refresh_state_cache_snp_values
+// -------------------------------------------------------------------------
+
+void refresh_state_cache_snp_values( Data const& data, Posteriors const& post, State& state )
+{
+    assert( data.num_snps == state.snp_norm.size() );
+    assert( data.num_snps == state.snp_mean.size() );
+    assert( data.num_snps == state.snp_variance.size() );
+
+    // We need to do a bit of trickery here to compute the SNP norms based on all _but_ the current
+    // SNP. Hence, remove its impact first, then do the norm, then move it back in.
+    for( size_t s = 0; s < data.num_snps; ++s ) {
+        // Remove the circ prod of the non-updated beta from current snp in our cache
+        for( size_t i = 0; i < data.num_indiv; ++i ) {
+            auto const circ_prod = data.x(i, s) * post.beta[s] + 1.0;
+            state.circle_product_x_beta[i] /= circ_prod;
+        }
+
+        // Now we can update the cache values, using all _but_ the value we just removed
+        update_state_snp_cache( data, post, state, s );
+
+        // Add the updated value to current snp in our cache
+        for( size_t i = 0; i < data.num_indiv; ++i ) {
+            auto const circ_prod = data.x(i, s) * post.beta[s] + 1.0;
+            state.circle_product_x_beta[i] *= circ_prod;
+        }
+    }
 }
 
 // -------------------------------------------------------------------------
@@ -330,34 +379,34 @@ void update_state_snp_cache( Data const& data, Posteriors const& post, State& st
 
 void refresh_state_cache( Data const& data, Posteriors const& post, State& state )
 {
+    // Also init the other caches by calling their refresh functions
+    state.circle_product_x_beta = circle_product_matrix( data.x, post.beta );
+    refresh_state_cache_alpha( data, post, state );
+    refresh_state_cache_snp_values( data, post, state );
+}
+
+// -------------------------------------------------------------------------
+//     init_state_cache
+// -------------------------------------------------------------------------
+
+void init_state_cache( Data const& data, Posteriors const& post, State& state )
+{
+    // Init the caches.
+    state.c_col_sum_squared.resize( data.num_covar, 0.0 );
+    state.product_c_alpha.resize( data.num_indiv, 0.0 );
+    state.snp_norm.resize( data.num_snps );
+    state.snp_mean.resize( data.num_snps );
+    state.snp_variance.resize( data.num_snps );
+
     // Pre-compute the per-column sum of squares of c.
     // This is constant throughout the run.
-    // We refresh this as well when the function is called due to too large heritability...
-    // But well, it's not expensive enough to care for now.
-    state.c_col_sum_squared.resize( data.num_covar, 0.0 );
     for( size_t c = 0; c < data.num_covar; ++c ) {
         for( size_t i = 0; i < data.num_indiv; ++i ) {
             state.c_col_sum_squared[c] += data.c(i, c) * data.c(i, c);
         }
     }
 
-    // Init the covarite based values. Will be updated in each iteration.
-    state.circle_product_x_beta = circle_product_matrix( data.x, post.beta );
-    assert( data.num_covar == post.alpha.size() );
-    state.product_c_alpha.resize( data.num_indiv, 0.0 );
-    for( size_t i = 0; i < data.num_indiv; ++i ) {
-        for( size_t c = 0; c < data.num_covar; ++c ) {
-            state.product_c_alpha[i] += data.c(i, c) * post.alpha[ c ];
-        }
-    }
-
-    // Init the snp based values. Will be updated in each iteration.
-    state.snp_norm.resize( data.num_snps );
-    state.snp_mean.resize( data.num_snps );
-    state.snp_variance.resize( data.num_snps );
-    for( size_t s = 0; s < data.num_snps; ++s ) {
-        update_state_snp_cache( data, post, state, s );
-    }
+    refresh_state_cache( data, post, state );
 }
 
 // =================================================================================================
@@ -569,6 +618,9 @@ void sample_and_update_beta(
             state.circle_product_x_beta[i] *= circ_prod;
         }
     }
+
+    // Finally, we need to recompute all caches to match with the whole lot of updated betas.
+    refresh_state_cache_snp_values( data, post, state );
 }
 
 // =================================================================================================
@@ -1182,7 +1234,7 @@ int main( int argc, char** argv )
     Trace trace;
     initialize_hyperparams( data, hyper );
     auto post = initial_posteriors( data, hyper, state );
-    refresh_state_cache( data, post, state );
+    init_state_cache( data, post, state );
     trace.entries.reserve( run.test_convergence_start );
 
     // Start the chain
