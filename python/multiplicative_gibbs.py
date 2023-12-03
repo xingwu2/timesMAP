@@ -110,7 +110,11 @@ def sampling(verbose,y,C,HapDM,iters,prefix,num,trace_container,gamma_container,
 	##specify hyper parameters
 	pie_a = 1
 	## assume 10 causal loci 
-	pie_b = 10000
+	pie_b = H_c / 10
+	
+	if pie_b < 10000:
+		pie_b = 10000
+	
 	a_sigma = 1
 	b_sigma = 1
 	a_e = 1

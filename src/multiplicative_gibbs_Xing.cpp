@@ -1059,6 +1059,7 @@ bool valid_sample_statistics( Statistics const& stats )
     // Check that we got a usable sample
     if( stats.total_heritability > 1 or stats.total_heritability < 0.01 ) {
         LOG_INFO << "unrealistic beta sample:";
+        LOG_INFO << " - polygenicity            " << stats.polygenicity;
         LOG_INFO << " - genetic_var             " << stats.genetic_var;
         LOG_INFO << " - pheno_var               " << stats.pheno_var;
         LOG_INFO << " - large_beta_ratio        " << stats.large_beta_ratio;
@@ -1083,6 +1084,10 @@ void initialize_hyperparams( Data const& data, Hyperparams& hyper )
     if( hyper.pi_b <= 1.0 ) {
         throw std::runtime_error( "Too few SNPs, chain would not converge." );
     }
+    if( hyper.pi_b <= 10000 ) {
+        hyper.pi_b = 10000;
+    }
+
 }
 
 // -------------------------------------------------------------------------
@@ -1101,6 +1106,7 @@ Posteriors initial_posteriors( Data const& data, Hyperparams const& hyper, State
     post.sigma_1 = draw_sigma_std_dev( hyper.sigma_1_a, hyper.sigma_1_b, state.rand_gen );
     post.sigma_e = draw_sigma_std_dev( hyper.sigma_e_a, hyper.sigma_e_b, state.rand_gen );
     LOG_DBG << "Initial pi: " << post.pi;
+    LOG_DBG << "pi_b: " << hyper.pi_b;
     LOG_DBG << "Initial sigma_1: " << post.sigma_1;
     LOG_DBG << "Initial sigma_e: " << post.sigma_e;
 
@@ -1169,12 +1175,14 @@ void sampling(
 
         // Do all sampling updates. We need a copy of the posterior here,
         // so that we can discard it if it's not good.
-        auto post_update = post;
-        sampling_step( data, hyper, post_update, state );
+        //auto post_update = post;
+        //sampling_step( data, hyper, post_update, state );
+        sampling_step( data, hyper, post, state );
         // LOG_TIME << "Sampling done";
 
         // Compute sanity metrics to see if this is good.
-        auto const stats = compute_sample_statistics( data, hyper, post_update, state );
+        //auto const stats = compute_sample_statistics( data, hyper, post_update, state );
+        auto const stats = compute_sample_statistics( data, hyper, post, state );
         if( it > run.sanity_iterations && ! valid_sample_statistics( stats )) {
             // If we want to discard this sample, we need to make sure that the cached values
             // are based on the previous data, instead of their current state that is based
@@ -1184,7 +1192,7 @@ void sampling(
         }
 
         // We have a sample that we want to use. Update the stored posterior.
-        post = std::move( post_update );
+        //post = std::move( post_update );
 
         // After the burn-in, we keep a trace of all samples
         if( it > run.burnin_iterations ) {
