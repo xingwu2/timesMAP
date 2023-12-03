@@ -210,7 +210,7 @@ include_directories( SYSTEM "libs/CLI11/include" )
 
 # Find all source files. The CMake documentation does not recommend this,
 # but for our purposes, this is good enough for now.
-file (GLOB_RECURSE timesmap_sources ${PROJECT_SOURCE_DIR}/src/*.cpp)
+file (GLOB_RECURSE timesmap_sources ${PROJECT_SOURCE_DIR}/src/multiplicative_gibbs_Xing.cpp)
 
 # Add our own code. The main is only one cpp file, the rest are headers included from there.
 include_directories( "src" )
