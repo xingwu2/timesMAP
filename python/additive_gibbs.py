@@ -72,11 +72,9 @@ def sample_beta(y,C_alpha,H,beta,gamma,sigma_1,sigma_e,H_beta):
 			residual = y - C_alpha -  H_beta + H[:,j] * beta[j]
 			new_mean = new_variance*np.dot(residual,H[:,j])*sigma_e_neg2
 			beta[j] = np.random.normal(new_mean,math.sqrt(new_variance))
-			if beta[j] < 0.05:
+			if abs(beta[j]) < 0.05:
 				beta[j] = 0
-				H_beta = H_beta_negj
-			else:
-				H_beta = H_beta_negj + H[:,j] * beta[j]
+			H_beta = H_beta_negj + H[:,j] * beta[j]
 	return(beta,H_beta)
 
 def sampling(verbose,y,C,HapDM,iters,prefix,num,trace_container,gamma_container,beta_container,alpha_container):
