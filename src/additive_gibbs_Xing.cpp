@@ -1,5 +1,5 @@
 /*
-    Multiplicative model
+    additive model
     Copyright (C) 2023 Lucas Czech and Xing Wu
 
     This program is free software: you can redistribute it and/or modify
@@ -407,7 +407,8 @@ void sample_and_update_alpha( Data const& data, Posteriors& post, State& state )
             for( size_t i = 0; i < data.num_indiv; ++i ) {
                 // the ith individual c_alpha without the cth covariate
                 state.product_c_alpha[i] -= data.c(i, c) * post.alpha[c];
-                auto const y_negi = data.y[i] - state.product_c_alpha[i] - state.product_x_beta[i];
+                auto const c_alpha_negc_i = state.product_c_alpha[i];
+                auto const y_negi = data.y[i] - c_alpha_negc_i - state.product_x_beta[i];
                 dot_prod += y_negi * data.c(i, c);
             }
             auto const new_variance = 1.0 / ( state.c_col_sum_squared[c] * sigma_e_neg2 );
