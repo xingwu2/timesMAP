@@ -1,5 +1,5 @@
 # timesMAP
-# Copyright (C) 2023 Lucas Czech and Xing Wu
+# Copyright (C) 2023-2024 Lucas Czech and Xing Wu
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -210,7 +210,7 @@ include_directories( SYSTEM "libs/CLI11/include" )
 
 # Find all source files. The CMake documentation does not recommend this,
 # but for our purposes, this is good enough for now.
-file (GLOB_RECURSE timesmap_sources ${PROJECT_SOURCE_DIR}/src/multiplicative_gibbs_Xing.cpp)
+file (GLOB_RECURSE timesmap_sources ${PROJECT_SOURCE_DIR}/src/*.cpp)
 
 # Add our own code. The main is only one cpp file, the rest are headers included from there.
 include_directories( "src" )
