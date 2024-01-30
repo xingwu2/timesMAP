@@ -24,6 +24,7 @@
 
 #include "CLI/CLI.hpp"
 
+#include "additive/command.hpp"
 #include "multiplicative/command.hpp"
 
 #include "tools/cli_formatter.hpp"
@@ -86,6 +87,7 @@ int main( int argc, char** argv )
     // global_options.initialize( argc, argv );
 
     // Set up all subcommands.
+    setup_additive_command( app );
     setup_multiplicative_command( app );
 
     // -------------------------------------------------------------------------
