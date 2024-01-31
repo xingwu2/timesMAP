@@ -25,9 +25,7 @@
     260 Panama Street, Stanford, CA 94305, USA
 */
 
-#include "common/input_data.hpp"
-#include "additive/hyper_params.hpp"
-#include "additive/state.hpp"
+#include "multiplicative/trace.hpp"
 
 #include <string>
 #include <vector>
@@ -38,58 +36,10 @@
 
 /**
  * @brief Helper class to handle the trace of a additive model chain, and compute statistics.
+ *
+ * As of now, the implementation is exactly the same as for the multiplicative model, so we just
+ * re-use the class. If we need different behavior later on, we can implement this here.
  */
-class AdditiveTrace
-{
-public:
-
-    // -------------------------------------------------------------------------
-    //     Inner Classes
-    // -------------------------------------------------------------------------
-
-    struct Entry
-    {
-        size_t iteration = 0;
-        AdditivePosteriors post;
-        AdditiveStatistics stats;
-        std::vector<double> top_betas;
-    };
-
-    // -------------------------------------------------------------------------
-    //     Constructors and Rule of Five
-    // -------------------------------------------------------------------------
-
-    AdditiveTrace() = default;
-    ~AdditiveTrace() = default;
-
-    AdditiveTrace( AdditiveTrace const& ) = default;
-    AdditiveTrace( AdditiveTrace&& )      = default;
-
-    AdditiveTrace& operator= ( AdditiveTrace const& ) = default;
-    AdditiveTrace& operator= ( AdditiveTrace&& )      = default;
-
-    // -------------------------------------------------------------------------
-    //     Public Members
-    // -------------------------------------------------------------------------
-
-    void push_to_trace(
-        size_t iteration,
-        AdditivePosteriors const& post,
-        AdditiveStatistics const& stats,
-        AdditiveHyperparams const& hyper
-    );
-
-    void pop_from_trace( size_t num_elements );
-
-    void summarize_trace( Data const& data, std::string const& file_prefix ) const;
-    void write_trace( std::string const& file_prefix ) const;
-
-    // -------------------------------------------------------------------------
-    //     Member Variables
-    // -------------------------------------------------------------------------
-
-    std::vector<Entry> entries;
-
-};
+using AdditiveTrace = MultiplicativeTrace;
 
 #endif // include guard

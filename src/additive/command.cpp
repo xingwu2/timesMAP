@@ -24,6 +24,7 @@
 
 #include "additive/command.hpp"
 
+#include "common/command.hpp"
 #include "tools/cli_setup.hpp"
 
 #include "genesis/utils/core/logging.hpp"
@@ -61,35 +62,5 @@ void setup_additive_command( CLI::App& app )
 
 void run_additive_command( AdditiveCLI const& cli )
 {
-    // Get the input
-    auto const data = read_input_data( cli.files );
-    initialize_hyperparams( data, const_cast<AdditiveHyperparams&>( cli.hyper ));
-
-    // Create samplers for each chain.
-    std::vector<AdditiveSampler> samplers;
-    for( size_t i = 0; i < cli.run.num_chains; ++i ) {
-        samplers.emplace_back(
-            cli.run, i, cli.run.random_seed + i, data, cli.hyper
-        );
-    }
-
-    // Set up the thread pool for processing.
-    genesis::utils::Options::get().init_global_thread_pool( cli.run.num_threads );
-    auto thread_pool = genesis::utils::Options::get().global_thread_pool();
-
-    // Run all chains by adding them as tasks to the thread pool, and wait for them to finish.
-    thread_pool->parallel_for(
-        0, cli.run.num_chains,
-        [&]( size_t i ){
-            samplers[i].run_chain();
-        }
-    ).wait();
-
-    // Summarize and write the trace
-    for( size_t i = 0; i < cli.run.num_chains; ++i ) {
-        samplers[i].get_trace().summarize_trace( data, cli.run.output_prefix + std::to_string( i ));
-        samplers[i].get_trace().write_trace( cli.run.output_prefix + std::to_string( i ));
-    }
-
-    // TODO output median of means and other summaries
+    run_multithreaded_command<AdditiveSampler>( cli );
 }

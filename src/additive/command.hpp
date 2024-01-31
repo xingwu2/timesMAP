@@ -29,7 +29,6 @@
 
 #include "common/input_data.hpp"
 #include "common/run_params.hpp"
-
 #include "additive/sampler.hpp"
 
 #include <string>

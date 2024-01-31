@@ -28,6 +28,7 @@
 #include "CLI/CLI.hpp"
 
 #include "common/input_data.hpp"
+#include "multiplicative/hyper_params.hpp"
 
 #include <string>
 #include <vector>
@@ -38,29 +39,18 @@
 
 /**
  * @brief Collection of all hyper params for the additive model.
+ *
+ * This is currently _almost_ the same as the MultiplicativeHyperparams, except for one default
+ * value. To avoid code duplication, we instead set the desired default value in the constructor
+ * of the class here. That's a bit hacky, but well, for now probbaly better than duplicating the
+ * whole class. Might need to refactor later.
  */
-struct AdditiveHyperparams
+struct AdditiveHyperparams : public MultiplicativeHyperparams
 {
-    // Distribution hyperparameters.
-    // pi_b is initialized to ratio num_snps / pi_b_ratio
-    double pi_a = 1.0;
-    double pi_b = 1.0;
-    double pi_b_ratio = 50.0;
-    double sigma_1_a = 1.0;
-    double sigma_1_b = 1.0;
-    double sigma_e_a = 1.0;
-    double sigma_e_b = 1.0;
-
-    // Sample validity
-    double min_beta = 0.05;
-    double large_beta = 0.3;
-
-    // Convergence Criteria
-    size_t num_top_betas = 5;
-    double geweke_first = 0.1;
-    double geweke_last = 0.5;
-    size_t geweke_intervals = 20;
-    double convergence_max_zscore = 1.5;
+    AdditiveHyperparams()
+    {
+        MultiplicativeHyperparams::pi_b_ratio = 50.0;
+    }
 };
 
 // -------------------------------------------------------------------------
@@ -72,115 +62,9 @@ struct AdditiveHyperparams
  */
 inline void add_additive_hyper_params_cli( CLI::App& app, AdditiveHyperparams& hyper )
 {
-    // ---------------------------------------
-    //     Distribution hyperparameters
-    // ---------------------------------------
-
-    app.add_option(
-        "--pi-a",
-        hyper.pi_a,
-        "Initial value for the `a` parameter of the beta distribution for pi."
-    )->group( "Hyperparameters: Distribution" );
-
-    // pi_b is initialized to ratio num_snps / pi_b_ratio
-    // app.add_option(
-    //     "--pi-b",
-    //     hyper.pi_b,
-    //     "Initial value for the `b` parameter of the beta distribution for pi."
-    // )->group( "Hyperparameters: Distribution" );
-
-    app.add_option(
-        "--pi-b-ratio",
-        hyper.pi_b_ratio,
-        "Ratio to compute the initial value for the `b` parameter of the beta distribution for pi. "
-        "The `b` parameter is then computed as `num_snps / pi_b_ratio`."
-    )->group( "Hyperparameters: Distribution" );
-
-    app.add_option(
-        "--sigma-1-a",
-        hyper.sigma_1_a,
-        "Initial value for the `a` parameter of the gamma distribution for sigma_1."
-    )->group( "Hyperparameters: Distribution" );
-
-    app.add_option(
-        "--sigma-1-b",
-        hyper.sigma_1_b,
-        "Initial value for the `b` parameter of the gamma distribution for sigma_1."
-    )->group( "Hyperparameters: Distribution" );
-
-    app.add_option(
-        "--sigma-e-a",
-        hyper.sigma_e_a,
-        "Initial value for the `a` parameter of the gamma distribution for sigma_e."
-    )->group( "Hyperparameters: Distribution" );
-
-    app.add_option(
-        "--sigma-e-b",
-        hyper.sigma_e_b,
-        "Initial value for the `b` parameter of the gamma distribution for sigma_e."
-    )->group( "Hyperparameters: Distribution" );
-
-    // ---------------------------------------
-    //     Sample validity
-    // ---------------------------------------
-
-    app.add_option(
-        "--min-beta",
-        hyper.min_beta,
-        "Minimum value for a beta draw to be considered. Below that, beta is set to 0."
-    )->group( "Hyperparameters: Sample Validity" );
-
-    app.add_option(
-        "--large-beta",
-        hyper.large_beta,
-        "Threshold for a beta to be considered large, for the sample statistics computation."
-    )->group( "Hyperparameters: Sample Validity" );
-
-    // ---------------------------------------
-    //     Convergence Criteria
-    // ---------------------------------------
-
-    app.add_option(
-        "--num-top-betas",
-        hyper.num_top_betas,
-        "Test convergence of the top n beta values."
-    )->group(
-        "Hyperparameters: Convergence Criteria"
-    );
-
-    app.add_option(
-        "--geweke-first",
-        hyper.geweke_first,
-        "First fraction of values for the Geweke (1992) z-score to test convergence."
-    )->group(
-        "Hyperparameters: Convergence Criteria"
-    )->check(
-        CLI::Range( static_cast<double>(0.0), static_cast<double>(1.0) )
-    );
-
-    app.add_option(
-        "--geweke-last",
-        hyper.geweke_last,
-        "Last fraction of values for the Geweke (1992) z-score to test convergence."
-    )->group(
-        "Hyperparameters: Convergence Criteria"
-    )->check(
-        CLI::Range( static_cast<double>(0.0), static_cast<double>(1.0) )
-    );
-
-    app.add_option(
-        "--geweke-intervals",
-        hyper.geweke_intervals,
-        "Intervals of values for the Geweke (1992) z-score to test convergence."
-    )->group(
-        "Hyperparameters: Convergence Criteria"
-    );
-
-    app.add_option(
-        "--max-zscore",
-        hyper.convergence_max_zscore,
-        "Maximum z-score that all tests have to be below to reach convergence."
-    )->group( "Hyperparameters: Convergence Criteria" );
+    // The struct is currently derived from MultiplicativeHyperparams, and has the exact same
+    // params, so we can re-use the function here.
+    add_multiplicative_hyper_params_cli( app, hyper );
 }
 
 // -------------------------------------------------------------------------
@@ -189,6 +73,8 @@ inline void add_additive_hyper_params_cli( CLI::App& app, AdditiveHyperparams& h
 
 /**
  * @brief Init the hyper params using the command line options and data.
+ *
+ * This function differs from the multiplicative one, so we define it here fully.
  */
 inline void initialize_hyperparams( Data const& data, AdditiveHyperparams& hyper )
 {

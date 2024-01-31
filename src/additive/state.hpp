@@ -25,6 +25,8 @@
     260 Panama Street, Stanford, CA 94305, USA
 */
 
+#include "multiplicative/state.hpp"
+
 #include <string>
 #include <vector>
 
@@ -34,19 +36,16 @@
 
 /**
  * @brief Collection of all posteriors of the additive model.
+ *
+ * As of now, the implementation is exactly the same as for the multiplicative model, so we just
+ * re-use the class. If we need different behavior later on, we can implement this here.
  */
-struct AdditivePosteriors
-{
-    std::vector<double> alpha;
-    std::vector<double> beta;
-    std::vector<int> gamma;
-    double pi      = 0.0;
-    double sigma_1 = 0.0;
-    double sigma_e = 0.0;
-};
+using AdditivePosteriors = MultiplicativePosteriors;
 
 /**
  * @brief Internally cached values of the additive model.
+ *
+ * This class differs from the cache of the multiplicative model, so we implement it here.
  */
 struct AdditiveCache
 {
@@ -59,15 +58,10 @@ struct AdditiveCache
 
 /**
  * @brief Convergence statistics computed by the additive model.
+ *
+ * As of now, the implementation is exactly the same as for the multiplicative model, so we just
+ * re-use the class. If we need different behavior later on, we can implement this here.
  */
-struct AdditiveStatistics
-{
-    size_t polygenicity            = 0;
-    double genetic_var             = 0.0;
-    double pheno_var               = 0.0;
-    double large_beta_ratio        = 0.0;
-    double large_beta_heritability = 0.0;
-    double total_heritability      = 0.0;
-};
+using AdditiveStatistics = MultiplicativeStatistics;
 
 #endif // include guard
