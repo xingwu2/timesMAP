@@ -210,19 +210,23 @@ include_directories( SYSTEM "libs/CLI11/include" )
 
 # Find all source files. The CMake documentation does not recommend this,
 # but for our purposes, this is good enough for now.
-file (GLOB_RECURSE timesmap_sources ${PROJECT_SOURCE_DIR}/src/multiplicative_gibbs_Xing.cpp)
+file (GLOB_RECURSE timesmap_additive_sources ${PROJECT_SOURCE_DIR}/src/additive_gibbs_Xing.cpp)
+file (GLOB_RECURSE timesmap_multiplicative_sources ${PROJECT_SOURCE_DIR}/src/multiplicative_gibbs_Xing.cpp)
 
 # Add our own code. The main is only one cpp file, the rest are headers included from there.
 include_directories( "src" )
-add_executable( timesmap ${timesmap_sources} )
+add_executable( timesmap_additive ${timesmap_additive_sources} )
+add_executable( timesmap_multiplicative ${timesmap_multiplicative_sources} )
 
 # Link it against Genesis, and against all dependencies of Genesis.
-target_link_libraries ( timesmap ${GENESIS_LINK_LIBRARIES} )
+target_link_libraries ( timesmap_additive ${GENESIS_LINK_LIBRARIES} )
+target_link_libraries ( timesmap_multiplicative ${GENESIS_LINK_LIBRARIES} )
 
 # We have to use LTO for timesmap as well for some compilers to properly link, I think.
 if(GENESIS_HAS_LTO)
     message(STATUS "Building with LTO/IPO support")
-    set_property(TARGET timesmap PROPERTY INTERPROCEDURAL_OPTIMIZATION TRUE)
+    set_property(TARGET timesmap_additive PROPERTY INTERPROCEDURAL_OPTIMIZATION TRUE)
+    set_property(TARGET timesmap_multiplicative PROPERTY INTERPROCEDURAL_OPTIMIZATION TRUE)
 else()
     message(STATUS "Building without LTO/IPO support")
 endif()
